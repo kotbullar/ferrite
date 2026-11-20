@@ -379,7 +379,7 @@ dependencies = [
 
 [[package]]
 name = "ferrite"
-version = "0.9.4-beta.2"
+version = "0.9.4-beta.3"
 dependencies = [
  "bk4829",
  "cortex-m",
@@ -406,7 +406,7 @@ dependencies = [
 
 [[package]]
 name = "ferrite-app"
-version = "0.9.4-beta.2"
+version = "0.9.4-beta.3"
 dependencies = [
  "ferrite-core",
  "ferrite-ui",
@@ -416,11 +416,11 @@ dependencies = [
 
 [[package]]
 name = "ferrite-checks"
-version = "0.9.4-beta.2"
+version = "0.9.4-beta.3"
 
 [[package]]
 name = "ferrite-core"
-version = "0.9.4-beta.2"
+version = "0.9.4-beta.3"
 dependencies = [
  "miniz_oxide 0.8.9",
  "serde_json",
@@ -433,7 +433,7 @@ dependencies = [
 
 [[package]]
 name = "ferrite-radio"
-version = "0.9.4-beta.2"
+version = "0.9.4-beta.3"
 dependencies = [
  "bk4829",
  "ferrite-core",
@@ -443,7 +443,7 @@ dependencies = [
 
 [[package]]
 name = "ferrite-reader"
-version = "0.9.4-beta.2"
+version = "0.9.4-beta.3"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
@@ -462,7 +462,7 @@ dependencies = [
 
 [[package]]
 name = "ferrite-restorer"
-version = "0.9.4-beta.2"
+version = "0.9.4-beta.3"
 dependencies = [
  "cortex-m",
  "cortex-m-rt",
@@ -483,7 +483,7 @@ dependencies = [
 
 [[package]]
 name = "ferrite-sim"
-version = "0.9.4-beta.2"
+version = "0.9.4-beta.3"
 dependencies = [
  "ferrite-app",
  "ferrite-core",
@@ -496,7 +496,7 @@ dependencies = [
 
 [[package]]
 name = "ferrite-sim-web"
-version = "0.9.4-beta.2"
+version = "0.9.4-beta.3"
 dependencies = [
  "ferrite-core",
  "ferrite-sim",
@@ -504,7 +504,7 @@ dependencies = [
 
 [[package]]
 name = "ferrite-store"
-version = "0.9.4-beta.2"
+version = "0.9.4-beta.3"
 dependencies = [
  "ferrite-app",
  "ferrite-core",
@@ -513,7 +513,7 @@ dependencies = [
 
 [[package]]
 name = "ferrite-ui"
-version = "0.9.4-beta.2"
+version = "0.9.4-beta.3"
 dependencies = [
  "ferrite-core",
  "ufmt",

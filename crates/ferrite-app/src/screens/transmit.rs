@@ -478,13 +478,19 @@ impl View for Transmit {
             let pwd = text4_width(pw.as_bytes(), &UI_12) + 10;
             w::chip_slot(lcd, (226 - pwd, pwd), cy, pw.as_bytes(), if pw.len() > 4 { AMBER } else { TEXT }, LINE, SURFACE);
         }
-        // Mic level (TX-12): how hard you are modulating; amber near full deviation. No power or drive
-        // readout: the radio cannot measure output, and drive only ever reads ~100%.
+        // TX-12.3: the upper bar tracks PA0. The lower row and label show the selected BK4829 mic gain.
         let mic = if live.tx.keyed && live.tx.slot == s { live.tx.mic } else { 0 };
-        if app.dirty(6, Mix::new().h(&mic).get()) {
+        if app.dirty(6, u32::from(mic) + 1) {
             w::field(lcd, 15, 40, y + 110, y + 127, y + 123, b"Mic", const { &w::st(&UI_12, SUB, SURFACE, Align::Left) });
             let lit = ((mic as u32 * 13 + 50) / 100) as u8;
-            parts::segs(lcd, 56, y + 115, 13, lit, 8, 10, 8, if mic >= 90 { AMBER } else { GREEN }, SURFACE);
+            parts::segs(lcd, 56, y + 112, 13, lit, 7, 9, 7, if mic >= 90 { AMBER } else { GREEN }, SURFACE);
+        }
+        let gain = app.set.mic_gain.clamp(1, ferrite_core::vox::MIC_GAIN_MAX);
+        if app.dirty(10, u32::from(gain)) {
+            let mut label = Buf::<8>::new();
+            let _ = uwrite!(label, "Gain {}", gain);
+            parts::segs(lcd, 56, y + 122, ferrite_core::vox::MIC_GAIN_MAX, gain, 7, 9, 3, VIOLET, SURFACE);
+            w::field(lcd, 176, 50, y + 110, y + 127, y + 123, label.as_bytes(), const { &w::st(&UI_12, VIOLET, SURFACE, Align::Right) });
         }
         // Timeout: the bar fills to the limit; amber from the pre-alert (TX-30).
         if app.dirty(7, Mix::new().h(&secs).get()) {
