@@ -325,6 +325,13 @@ impl<B: Bus> Bk4829<B> {
         self.bus.write(reg, (v & !mask) | (value & mask));
     }
 
+    /// Select a fixed entry from the stock RX AGC gain table (0–3), or restore automatic gain.
+    pub fn rx_gain(&mut self, fixed: Option<u8>) {
+        // REG_7E[15] enables fixed gain, and [14:12] selects the table entry.
+        let mode = fixed.map_or(0x3000, |index| 0x8000 | (u16::from(index.min(3)) << 12));
+        self.modify(0x7E, 0xF000, mode);
+    }
+
     /// REG_00: 0x4829.
     pub fn id(&mut self) -> u16 {
         self.read(reg::ID)

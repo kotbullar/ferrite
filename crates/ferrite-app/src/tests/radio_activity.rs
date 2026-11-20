@@ -923,7 +923,7 @@ fn ptt_a_keys_the_active_slot() {
     assert!(t.cmds().contains(&RadioCmd::Transmit { slot: 2, on: false }));
 }
 
-/// KEY-22: SIDE2 held alone opens the frequency counter when it comes up; SIDE2 + knob is big steps, never the
+/// KEY-22: SIDE2 held alone opens the frequency counter when it comes up; SIDE2 + knob sets RF gain, never the
 /// counter, even when the knob turns after 700 ms.
 #[test]
 fn side2_held_alone_is_the_counter() {

@@ -181,10 +181,10 @@ fn vfo_steps_and_bands() {
     assert!(t.cmds().contains(&RadioCmd::TuneSlot { slot: 0, freq: f0 + 1_250 }));
     t.knob(-2);
     assert_eq!(t.freq(), f0 - 1_250);
-    // NAV-3: SIDE2 held, 1 MHz
+    // NAV-3: SIDE2 + Up, 1 MHz
     let s = store();
     t.app.key_down(Key::Side(2), t.t, &s);
-    t.knob(1);
+    t.tap(Key::Up);
     t.app.key_up(Key::Side(2), t.t + 100, &s);
     assert_eq!(t.freq(), f0 - 1_250 + 100_000);
     assert!(!t.cmds().iter().any(|c| matches!(c, RadioCmd::Scan { .. })), "SIDE2 as a modifier doesn't scan");
@@ -283,7 +283,7 @@ fn quick_settings() {
     t.tap(Key::Hash); // MENU-18: default
     assert_eq!(t.app.slot(0).cfg().squelch, 4);
     t.tap(Key::Up); // wraps to "0 More"
-    assert_eq!(t.app.screen(), Screen::Quick(Quick { row: 9 }));
+    assert_eq!(t.app.screen(), Screen::Quick(Quick { row: crate::screens::quick::MORE_ROW }));
     t.tap(Key::Digit(7)); // MENU-5: digits pick
     assert_eq!(t.app.screen(), Screen::Quick(Quick { row: 6 }));
     t.knob(1);

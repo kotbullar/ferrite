@@ -273,6 +273,7 @@ pub struct App {
     screen: Screen,
     snake: screens::snake::Game,
     slots: [Slot; SLOTS],
+    rf_gain: u8,
     active: u8,
     /// The slot the PTT being pressed keys ([`App::ptt_target`]).
     pub(crate) ptt_slot: u8,
@@ -473,6 +474,7 @@ impl App {
             snake: screens::snake::Game::new(),
             slots: [Slot::new(mhz(146) + 52_000), Slot::new(mhz(443) + 47_500), Slot::new(mhz(118) + 95_000)],
             active: 0,
+            rf_gain: 0,
             ptt_slot: 0,
             qmenu: None,
             ptt_block: 0,
@@ -2034,6 +2036,18 @@ impl App {
         match slot.cfg().squelch {
             SQ_GLOBAL.. => slot.cfg.squelch.min(9),
             l => l,
+        }
+    }
+
+    pub(crate) fn rf_gain_text(&self) -> &'static [u8] {
+        [b"Auto".as_slice(), b"1 / 4", b"2 / 4", b"3 / 4", b"4 / 4"][self.rf_gain as usize]
+    }
+
+    pub(crate) fn step_rf_gain(&mut self, d: i32) {
+        let gain = i32::from(self.rf_gain).saturating_add(d).clamp(0, 4) as u8;
+        if gain != self.rf_gain {
+            self.rf_gain = gain;
+            self.out.push(RadioCmd::RfGain(gain));
         }
     }
 
