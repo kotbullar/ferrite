@@ -58,7 +58,7 @@ pub enum RadioCmd {
     /// The transmit timeout in seconds, 30-600 (TX-30, 0 8 1; sent at start-up and when it changes): the UI
     /// unkeys at it, the Radio task's sequencer 5 s later as the backstop.
     TxTimeout(u16),
-    /// Mic gain 1-9 (VOX-15, 0 8 3; sent at start-up and when it changes): REG_7D at every voice key-up
+    /// Mic gain 1–12 (VOX-15, 0 8 3; sent at start-up and when it changes): REG_7D at every voice key-up
     /// (`vox::mic_reg`).
     MicGain(u8),
     /// The beep volume, 1-5 (SND-3, 0 7 5 2; sent at start-up and when it changes): every beep's tone gain.

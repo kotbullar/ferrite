@@ -179,7 +179,7 @@ pub struct Settings {
     pub vox: bool,
     pub vox_level: u8,
     pub vox_tail: u8,
-    /// 0 8 3 (VOX-15): Mic gain 1-9, 5 stock's default REG_7D.
+    /// 0 8 3 (VOX-15): Mic gain 1–12, 5 stock's default REG_7D.
     pub mic_gain: u8,
     /// 0 8 1 (TX-30): the transmit timeout in 30 s steps, 1-20 (30-600 s; stock's TOT counts 30 s too).
     pub tx_timeout: u8,
@@ -570,7 +570,7 @@ impl Settings {
         if self.clock as usize >= CLOCKS.len() {
             self.clock = Self::DEFAULT.clock;
         }
-        if !(1..=9).contains(&self.mic_gain) {
+        if !(1..=ferrite_core::vox::MIC_GAIN_MAX).contains(&self.mic_gain) {
             self.mic_gain = Self::DEFAULT.mic_gain;
         }
         if !(1..=20).contains(&self.tx_timeout) {

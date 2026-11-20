@@ -1716,7 +1716,7 @@ impl App {
         self.out.push(RadioCmd::ScanTx(self.set.scan_tx));
         self.out.push(RadioCmd::ToneLevel(self.set.tone_level));
         self.out.push(RadioCmd::BeepVol(self.set.beep_vol.clamp(1, 3)));
-        self.out.push(RadioCmd::MicGain(self.set.mic_gain.clamp(1, 9)));
+        self.out.push(RadioCmd::MicGain(self.set.mic_gain.clamp(1, ferrite_core::vox::MIC_GAIN_MAX)));
         self.out.push(RadioCmd::TxTimeout(self.set.tx_timeout_s() as u16));
         self.send_vox();
         self.send_tx_tones();

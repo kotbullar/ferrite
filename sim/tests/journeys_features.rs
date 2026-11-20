@@ -429,3 +429,17 @@ fn snake_from_tools() {
     r.press(Key::Menu).expect_text("Score 0").expect_text("Pause");
     r.press(Key::Exit).expect_screen("Settings group").expect_text("Snake");
 }
+
+/// VOX-15: the voice mic gain reaches the BK4829's maximum from the Transmit menu.
+#[test]
+fn microphone_gain_reaches_twelve() {
+    let mut r = Radio::new();
+    r.menu("0 8 3").expect_text("Mic gain");
+    r.take_cmds();
+    r.knob(7).expect_text("12");
+    assert!(r.take_cmds().contains(&RadioCmd::MicGain(12)));
+    r.knob(1);
+    assert!(!r.take_cmds().contains(&RadioCmd::MicGain(13)));
+    r.press(Key::Hash);
+    assert!(r.take_cmds().contains(&RadioCmd::MicGain(5)));
+}

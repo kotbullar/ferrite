@@ -499,7 +499,7 @@ struct Tx {
     dialled: bool,
     /// DTMF-1: the sequence being dialled ([`Radio::dial_step`]).
     dial: Option<Dial>,
-    /// Mic gain 1-9 (0 8 3, VOX-15): REG_7D at each voice key-up.
+    /// Mic gain 1–12 (0 8 3, VOX-15): REG_7D at each voice key-up.
     mic: u8,
     /// TX-30: 0 8 1's timeout (s); the sequencer's backstop is [`TX_BACKSTOP_S`] after it.
     timeout_s: u16,
