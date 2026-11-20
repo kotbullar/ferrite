@@ -1184,7 +1184,8 @@ fn remote_keys_drive_the_menus() {
     pc.keys("MENU");
     assert!(matches!(pc.app.screen(), Screen::Quick(_)));
     let rows = pc.lines("row");
-    assert_eq!(rows.len(), 10, "nine settings and 0 More: {rows:?}");
+    assert_eq!(rows.len(), 11, "nine numbered settings, RF gain and 0 More: {rows:?}");
+    assert_eq!(rows[9], "row 10 \"RF gain\" \"Auto\"");
     assert!(rows[0].starts_with("row 1 \"Squelch\"") && rows[0].contains(" sel"), "{rows:?}");
     pc.keys("0 7");
     let ui = pc.ui();

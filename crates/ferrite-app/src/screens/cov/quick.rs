@@ -80,8 +80,8 @@ fn hints_and_heard_tone() {
     t.tap(Key::Star);
     t.app.undo = None;
     t.tap(Key::Digit(1));
-    t.tap(Key::Up); // wraps to the tenth: Advanced
-    assert_eq!(row(&t), 9);
+    t.tap(Key::Up); // wraps to More
+    assert_eq!(row(&t), crate::screens::quick::MORE_ROW);
     t.reads("hints \"^v\" \"Move\" \"OK\" \"Open\" \"BACK\" \"Back\"");
     let a = t.app.active as usize;
     t.live.slots[a].heard_tone = 885; // the Radio task heard 88.5 on the slot

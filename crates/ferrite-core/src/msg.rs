@@ -17,6 +17,8 @@ pub enum RadioCmd {
     Tune(Freq10),
     /// Squelch level 0-9.
     Squelch(u8),
+    /// Receiver gain on the BK4829s: 0 automatic, 1–4 fixed (lowest to highest).
+    RfGain(u8),
     /// Battery Save: the receiver sleep cycle.
     BatterySave(crate::rxsleep::Level),
     /// A key or knob: counts as activity for receiver sleep.
