@@ -90,13 +90,14 @@ const G2: [Entry; 6] = [
     Entry(concat!("Local zone|50 km|", txtc!("A zone of the channels within this range of you, nearest first. Needs a GPS fix or the fixed position (0 6 9)."))),
     Entry(concat!("FM broadcast||", txtc!("Step, AGC, radio monitor, sleep timer."))),
 ];
-const G3: [Entry; 6] = [
+const G3: [Entry; 7] = [
     Entry(concat!("Band scope|60 bars|", txtc!("Bars, step, speed, trigger, waterfall."))),
     Entry(concat!("Frequency counter||", txtc!("Find a nearby transmitter's frequency."))),
     Entry(concat!("HF mode||", txtc!("Below 64 MHz. Everything else pauses."))),
     Entry(concat!("Crossband repeater||", txtc!("Repeat one slot's band on another's."))),
     Entry(concat!("Tone search||", txtc!("Find the CTCSS or DCS in use."))),
     Entry(concat!("Satellites||", txtc!("Passes, pointing and Doppler for FM satellites."))),
+    Entry(concat!("Snake||", txtc!("Steer the snake and collect food."))),
 ];
 const G4: [Entry; 5] = [
     Entry(concat!("Event log||", txtc!("Every decode and alert."))),

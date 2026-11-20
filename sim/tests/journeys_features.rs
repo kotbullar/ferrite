@@ -392,3 +392,15 @@ fn quick_mute() {
     }
     r.expect_text("Muted");
 }
+
+/// SNAKE-1, SNAKE-2: launch from Tools, pause and restart, then return to Tools.
+#[test]
+fn snake_from_tools() {
+    let mut r = Radio::new();
+    r.menu("0 3 7").expect_screen("Snake").expect_text("Score 0").expect_text("Start");
+    r.press(Key::Menu).expect_text("Pause");
+    r.press(Key::Menu).wait(4_000).expect_text("Paused").expect_text("Resume");
+    r.press(Key::Menu).wait(4_000).expect_text("Game over").expect_text("Restart");
+    r.press(Key::Menu).expect_text("Score 0").expect_text("Pause");
+    r.press(Key::Exit).expect_screen("Settings group").expect_text("Snake");
+}

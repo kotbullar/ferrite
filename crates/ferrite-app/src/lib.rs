@@ -271,6 +271,7 @@ const ALERT_WAIT: u8 = 2;
 
 pub struct App {
     screen: Screen,
+    snake: screens::snake::Game,
     slots: [Slot; SLOTS],
     active: u8,
     /// The slot the PTT being pressed keys ([`App::ptt_target`]).
@@ -469,6 +470,7 @@ impl App {
     pub fn new(set: &'static mut Settings, alert: &'static mut AlertInfo) -> Self {
         let mut app = App {
             screen: Screen::Home,
+            snake: screens::snake::Game::new(),
             slots: [Slot::new(mhz(146) + 52_000), Slot::new(mhz(443) + 47_500), Slot::new(mhz(118) + 95_000)],
             active: 0,
             ptt_slot: 0,
@@ -573,6 +575,11 @@ impl App {
 
     pub fn screen(&self) -> Screen {
         self.screen
+    }
+
+    /// The game needs regular UI ticks and redraws only while the snake is moving.
+    pub fn snake_playing(&self) -> bool {
+        matches!(self.screen, Screen::Snake(_)) && self.snake.playing()
     }
 
     /// The page the content area shows, as a hash that changes when a screen turns its page (HF's loading page,
