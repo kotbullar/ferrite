@@ -38,7 +38,7 @@ pub(crate) const HOME_KEYS: [Row; 15] = [
 ];
 
 /// HELP-3: the side keys and PTTs.
-pub(crate) const SIDE_KEYS: [Row; 13] = [
+pub(crate) const SIDE_KEYS: [Row; 14] = [
     ("", "SIDE1 (PF1)"),
     ("Tap", "Monitor on or off"),
     ("Hold", "Monitor while held"),
@@ -47,7 +47,8 @@ pub(crate) const SIDE_KEYS: [Row; 13] = [
     ("", "SIDE2 (PF2)"),
     ("Tap", "Scan start or stop"),
     ("Hold", "Frequency counter"),
-    ("+ Knob \x18\x19", "1 MHz or 10 channels"),
+    ("+ Knob", "RF gain"),
+    ("+ \x18\x19", "1 MHz or 10 channels"),
     ("", "PTT"),
     ("PTT A", "Transmit, active slot"),
     ("PTT B", "Transmit on slot B"),
