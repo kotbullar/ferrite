@@ -93,6 +93,7 @@ pub mod scope;
 pub mod setup;
 pub(crate) mod shared;
 pub mod shortcut;
+pub mod snake;
 pub mod squelch;
 pub mod status;
 pub(crate) mod table;
@@ -126,6 +127,7 @@ pub enum Screen {
     Home,
     Edit(edit::Edit),
     Quick(quick::Quick),
+    Snake(snake::Snake),
     /// MENU-34: the APRS slot's quick page (hold ABC).
     QGrid(qgrid::QGrid),
     Advanced(advanced::Advanced),
@@ -191,6 +193,7 @@ macro_rules! each {
             }
             Screen::Edit($s) => $e,
             Screen::Quick($s) => $e,
+            Screen::Snake($s) => $e,
             Screen::QGrid($s) => $e,
             Screen::Advanced($s) => $e,
             Screen::Status($s) => $e,

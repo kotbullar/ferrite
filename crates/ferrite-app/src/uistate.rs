@@ -1368,6 +1368,7 @@ pub fn id(s: Screen) -> &'static str {
         Screen::Edit(_) => "Edit",
         Screen::QGrid(_) => "AprsQuick",
         Screen::Quick(_) => "Quick",
+        Screen::Snake(_) => "Snake",
         Screen::Advanced(_) => "More",
         Screen::Status(_) => "Status",
         Screen::Entry(_) => "Entry",
