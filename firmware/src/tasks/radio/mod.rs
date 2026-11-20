@@ -319,7 +319,7 @@ struct Radio {
     scope: Option<ScopeRun>,
     /// SCOPE-14: the sweep waits after a key or knob step, so the UI handles it first.
     sweep_hold: SweepHold,
-    scope_cfg: (u8, u8, bool),
+    scope_cfg: (u8, u8, bool, bool),
     /// SAME weather alerts (WX-4, DEC-19): on from the UI, and the BK4829 receiver's state.
     same_on: bool,
     /// DEC-6: the DTMF detector wanted, what each chip was armed for, and each slot's digits.
@@ -380,6 +380,7 @@ const SI_VOLUME: u8 = 56;
 /// 0x08023808 / 0x080235E8): the frequency (REG_38/39), REG_30 0x0200 then 0xBFF1 (the VCO recalibration), the
 /// dwell, then REG_67. Stock dwells about 10 ms a point (its 10 ms tick); the dwell is 0 3 1 3's.
 struct ScopeRun {
+    hf: bool,
     chip: u8,
     centre: Freq10,
     step: Freq10,
@@ -829,7 +830,7 @@ pub async fn task() {
         tsearch: None,
         scope: None,
         sweep_hold: SweepHold::new(),
-        scope_cfg: (60, 100, false),
+        scope_cfg: (60, 100, false, false),
         same_on: false,
         dtmf_on: false,
         dtmf_key: [None; 2],

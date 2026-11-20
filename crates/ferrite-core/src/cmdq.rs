@@ -218,7 +218,7 @@ mod tests {
             RadioCmd::BeepVol(1),
             RadioCmd::Mute(1),
             RadioCmd::BcastSlot(Some(1)),
-            RadioCmd::ScopeCfg { bars: 1, dwell: 1, strip: true },
+            RadioCmd::ScopeCfg { bars: 1, dwell: 1, strip: true, hf: false },
             RadioCmd::Same(true),
             RadioCmd::AprsSlot(1),
             RadioCmd::DtmfRx(true),

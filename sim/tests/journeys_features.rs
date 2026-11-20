@@ -464,3 +464,30 @@ fn microphone_gain_reaches_twelve() {
     r.press(Key::Hash);
     assert!(r.take_cmds().contains(&RadioCmd::MicGain(5)));
 }
+
+/// HF-36: the 27 MHz waterfall previews and selects frequencies in HF mode.
+#[test]
+fn hf_waterfall_tunes_the_marker_without_changing_home() {
+    let mut r = Radio::new();
+    let home = r.sim.app().slot(0).freq();
+    r.menu("0 3 3").wait(8000).expect_screen("HF mode");
+    r.type_("27*185").press(Key::Menu);
+    let centre = mhz(27) + 18_500;
+    assert_eq!(r.sim.app_mut().settings_mut().hf.freq, centre);
+    r.take_cmds();
+    r.press(Key::Menu).wait(500).expect_screen("Scope").expect_text("HF scope");
+    let cmds = r.take_cmds();
+    assert!(cmds.iter().any(|c| matches!(c, RadioCmd::Hf { on: false, keep_rx: true, .. })));
+    assert!(cmds.iter().any(|c| matches!(c, RadioCmd::ScopeCfg { hf: true, strip: false, .. })));
+    let step = cmds.iter().find_map(|c| match c {
+        RadioCmd::Sweep { step, on: true, .. } => Some(*step),
+        _ => None,
+    }).expect("HF sweep started");
+    r.press(Key::Right).press(Key::Side(1)).expect_text("Listen");
+    let picked = centre + u32::from(step);
+    assert!(r.take_cmds().iter().any(|c| matches!(c, RadioCmd::ScopeListen { freq, .. } if *freq == picked)));
+    r.press(Key::Menu).expect_screen("HF mode");
+    assert_eq!(r.sim.app_mut().settings_mut().hf.freq, picked);
+    assert_eq!(r.sim.app().slot(0).freq(), home);
+    assert!(r.take_cmds().iter().any(|c| matches!(c, RadioCmd::Hf { freq, on: true, .. } if *freq == picked)));
+}

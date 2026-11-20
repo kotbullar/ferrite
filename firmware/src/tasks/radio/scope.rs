@@ -20,12 +20,26 @@ impl Radio {
             return;
         }
         let chip = Sel::rx(centre).chip();
-        let (n, tenths, strip) = self.scope_cfg;
+        let (n, tenths, strip, hf) = self.scope_cfg;
+        if hf {
+            if !(mhz(18)..mhz(64)).contains(&centre) || !self.has(chip) {
+                self.scope = None;
+                self.live.mode = ModeLive::Off;
+                return;
+            }
+            self.select_rx(centre, Cause::HfReceiver).await;
+            if self.path.rx_now() != Rx::Bk(Sel::rx(centre)) {
+                self.scope = None;
+                self.live.mode = ModeLive::Off;
+                return;
+            }
+        }
         let home = strip.then_some(self.active);
         let n = n.clamp(1, ferrite_core::msg::SCOPE_BARS as u8);
         let keep = self.scope.as_ref().filter(|sc| sc.centre == centre && sc.step == step as Freq10 && sc.n == n);
         let last = keep.map_or([0; ferrite_core::msg::SCOPE_BARS], |sc| sc.last);
         self.scope = Some(ScopeRun {
+            hf,
             chip,
             centre,
             step: step as Freq10,
@@ -58,6 +72,9 @@ impl Radio {
     /// SCOPE-11: listen on `freq` with the scope's mode (the path set first); 0 goes back to sweeping.
     pub(super) async fn scope_listen(&mut self, freq: Freq10, mode: u8) {
         let Some(sc) = self.scope.as_mut() else { return };
+        if sc.hf && freq != 0 && !(mhz(18)..mhz(64)).contains(&freq) {
+            return;
+        }
         (sc.listen, sc.mode) = (freq, mode);
         let chip = sc.chip;
         let back = sc.centre;
@@ -79,6 +96,9 @@ impl Radio {
         let low = sc.centre as i64 - sc.step as i64 * sc.n as i64 / 2;
         let f = low + sc.step as i64 * i as i64;
         let f = Freq10::try_from(f).ok()?;
+        if sc.hf && !(mhz(18)..mhz(64)).contains(&f) {
+            return None;
+        }
         let (here, centre) = (Sel::rx(f), Sel::rx(sc.centre));
         (here.chip() == centre.chip() && here.relay() == centre.relay() && freq::receivable(f)).then_some(f)
     }

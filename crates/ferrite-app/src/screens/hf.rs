@@ -53,7 +53,7 @@ pub fn mode_name(m: u8) -> &'static str {
 
 /// Chip 1 takes over from 18 MHz, every mode (HF-9, HF-10; decision 322: as stock and nicFW).
 pub(crate) const CHIP1_FROM: Freq10 = mhz(18);
-const TOP: Freq10 = mhz(64);
+pub(crate) const TOP: Freq10 = mhz(64);
 const BOTTOM: Freq10 = 15_000; // 150 kHz
 
 /// The HF bands, low to high: name, start, end, where it starts, its mode. ◀▶ walks one of two lists picked by
@@ -486,10 +486,10 @@ fn seek(app: &mut App, up: bool) {
 pub(crate) fn send(app: &mut App) {
     (app.radio.hf_tuned_at, app.radio.hf_counted) = (app.now, false);
     let h = &app.set.hf;
-    app.out.push(RadioCmd::Hf { freq: h.freq, mode: h.mode, on: true });
+    app.out.push(RadioCmd::Hf { freq: h.freq, mode: h.mode, on: true, keep_rx: false });
 }
 
-fn tune_to(app: &mut App, f: Freq10, mode: Option<u8>) {
+pub(crate) fn tune_to(app: &mut App, f: Freq10, mode: Option<u8>) {
     tune_vfo(app, f, mode, None)
 }
 
@@ -823,6 +823,12 @@ impl View for Hf {
                 app.radio.hf_entry = d as u32;
                 Hf { n: 1, point: 0, ..self }.put(app);
             }
+            (Key::Menu, Short) if app.radio.keyed.is_some() => {}
+            (Key::Menu, Short) if h.chip1() => {
+                let scope = super::scope::open_at(app, h.freq, true);
+                app.open_screen(scope);
+            }
+            (Key::Menu, Short) => app.show_toast(b"Waterfall", b"From 18 MHz", false),
             // HF-31: hold 3 seeks up, hold 1 down (nicFW's tuner keys), with the SI4732's own seek.
             (Key::Digit(d @ (1 | 3)), Long) => seek(app, d == 3),
             // HF-12: hold 4 the next AGC
@@ -1033,7 +1039,7 @@ impl View for Hf {
         }
     }
 
-    fn hints(self, _: &App) -> Hints {
+    fn hints(self, app: &App) -> Hints {
         if !self.loaded {
             Hints::new(&[("BACK", "Cancel")])
         } else if self.menu {
@@ -1042,6 +1048,8 @@ impl View for Hf {
             Hints::new(&[("*/OK", "Go"), ("BACK", "Cancel")]) // VFO-24
         } else if self.n > 0 {
             Hints::new(&[("*", "Point"), ("OK", "Go"), ("BACK", "Cancel")])
+        } else if app.set.hf.chip1() {
+            Hints::new(&[("Knob", "Tune"), (ARROWS_LR, "Step"), ("OK", "Waterfall")])
         } else {
             Hints::new(&[("Knob", "Tune"), (ARROWS_LR, "Step"), ("Hold MENU", "More")])
         }

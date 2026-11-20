@@ -9,6 +9,7 @@
 
 use super::activity::Mode;
 use super::entry::{Entry, EntryFor};
+use super::hf;
 use super::parts;
 use super::shared::*;
 use super::{Cx, Hints, View};
@@ -45,6 +46,7 @@ const TRIGGER_WAIT_MS: u32 = 2000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Scope {
+    pub(crate) hf: bool,
     /// Bar index; the centre is n / 2.
     pub marker: u8,
     /// 0 sweeping; 1 the marker, 2 the strongest (SIDE1, SIDE2), 3 the trigger (SCOPE-10).
@@ -73,9 +75,31 @@ pub fn step_of(app: &App) -> u16 {
 
 /// Hold 1 on home, MENU 0 3 1 6 (SCOPE-1): the scope around the active slot's frequency.
 pub fn open(app: &mut App) -> Screen {
-    let f = app.slot(app.active).freq();
+    open_at(app, app.slot(app.active).freq(), false)
+}
+
+pub(crate) fn open_at(app: &mut App, f: Freq10, hf: bool) -> Screen {
     app.radio.centre = f; // MODE-2: the reconciler starts the sweep here
-    Screen::Scope(Scope { marker: (bars_n(app) / 2) as u8, listen: 0, at: 0, peak: 255, run: 0, seen: 0, heard: false, since: 0 })
+    Screen::Scope(Scope { hf, marker: (bars_n(app) / 2) as u8, listen: 0, at: 0, peak: 255, run: 0, seen: 0, heard: false, since: 0 })
+}
+
+/// The nearest scope can be behind frequency entry or scope settings.
+pub(crate) fn from_hf(app: &App) -> bool {
+    core::iter::once(app.screen).chain(app.back.iter().rev().flatten().copied()).find_map(|screen| {
+        if let Screen::Scope(scope) = screen { Some(scope.hf) } else { None }
+    }).unwrap_or(false)
+}
+
+fn centre_for(app: &App, centre: Freq10) -> Freq10 {
+    if from_hf(app) { centre.clamp(hf::CHIP1_FROM, hf::TOP - 1) } else { centre }
+}
+
+fn valid_for_hf(app: &mut App, freq: Freq10) -> bool {
+    if from_hf(app) && !(hf::CHIP1_FROM..hf::TOP).contains(&freq) {
+        app.show_toast(b"HF waterfall", b"18 to 64 MHz", false);
+        return false;
+    }
+    true
 }
 
 /// A new centre or setting while the scope runs; [`App::reconcile_mode`] starts it otherwise (MODE-2).
@@ -89,7 +113,9 @@ fn sweep(app: &mut App, centre: Freq10) {
 /// The scope's start or retune: its settings, then the sweep around `centre`.
 pub(crate) fn send_sweep(app: &mut App, centre: Freq10) {
     let (step, bars, dwell) = (step_of(app), bars_n(app) as u8, app.set.scope_dwell.clamp(1, 100));
-    app.out.push(RadioCmd::ScopeCfg { bars, dwell, strip: false });
+    let hf = from_hf(app);
+    app.radio.scope_hf = hf;
+    app.out.push(RadioCmd::ScopeCfg { bars, dwell, strip: false, hf });
     app.out.push(RadioCmd::Sweep { centre, step, on: true });
 }
 
@@ -129,7 +155,8 @@ pub fn line_h(line: u8) -> i32 {
 }
 
 fn listen(app: &mut App, f: Freq10) {
-    app.out.push(RadioCmd::ScopeListen { freq: f, mode: app.set.scope_mode % 3 });
+    let mode = if from_hf(app) { app.set.hf.mode } else { app.set.scope_mode % 3 };
+    app.out.push(RadioCmd::ScopeListen { freq: f, mode });
 }
 
 /// The active slot's VFO on f (OK, PTT while listening).
@@ -145,7 +172,7 @@ pub fn recentre(app: &mut App, s: Scope, f: Freq10) -> Screen {
     if s.listen != 0 {
         listen(app, 0);
     }
-    sweep(app, f);
+    sweep(app, centre_for(app, f));
     Screen::Scope(Scope { marker: (bars_n(app) / 2) as u8, peak: 255, ..s.sweeping() })
 }
 
@@ -180,6 +207,10 @@ impl View for Scope {
         "Scope"
     }
 
+    fn title(self, _: &App, b: &mut Buf<10>) {
+        b.set(if self.hf { b"HF scope" } else { b"Scope" });
+    }
+
     fn mockup(self) -> Option<&'static str> {
         Some("Scope.png")
     }
@@ -197,16 +228,24 @@ impl View for Scope {
             (Key::Menu, Short) => {
                 // SCOPE-3: OK (Go) tunes the active slot's VFO to the marker.
                 let f = bar_freq(centre, step, n, m as i32);
-                tune(app, f);
-                app.go_home();
-                app.send_slot(app.active);
+                if from_hf(app) {
+                    if !valid_for_hf(app, f) {
+                        return;
+                    }
+                    hf::tune_to(app, f, None);
+                    app.back();
+                } else {
+                    tune(app, f);
+                    app.go_home();
+                    app.send_slot(app.active);
+                }
                 let fq = w::freq3(f);
                 app.show_toast(b"Tuned", fq.as_bytes(), false);
             }
             (Key::Hash, Short) => {
                 // Centre on the strongest.
                 if self.peak != 255 {
-                    let c = bar_freq(centre, step, n, self.peak as i32);
+                    let c = centre_for(app, bar_freq(centre, step, n, self.peak as i32));
                     app.radio.centre = c;
                     if self.listen != 0 {
                         listen(app, 0);
@@ -223,12 +262,16 @@ impl View for Scope {
                 } else {
                     let i = if which == 1 { Some(m as u8) } else { (self.peak != 255).then_some(self.peak) };
                     if let Some(i) = i {
-                        listen(app, bar_freq(centre, step, n, i as i32));
+                        let freq = bar_freq(centre, step, n, i as i32);
+                        if !valid_for_hf(app, freq) {
+                            return;
+                        }
+                        listen(app, freq);
                         app.screen = Screen::Scope(Scope { listen: which, at: i, run: 0, ..self });
                     }
                 }
             }
-            (Key::Star, Short) => {
+            (Key::Star, Short) if !from_hf(app) => {
                 app.set.scope_mode = (app.set.scope_mode + 1) % 3;
                 if self.listen != 0 {
                     listen(app, self.freq(app));
@@ -252,7 +295,7 @@ impl View for Scope {
 
     fn knob(self, app: &mut App, d: i32, _: &impl ChannelStore) {
         let (n, step) = (bars_n(app), step_of(app));
-        let c = bar_freq(app.radio.centre, step, n, n as i32 / 2 + d);
+        let c = centre_for(app, bar_freq(app.radio.centre, step, n, n as i32 / 2 + d));
         app.radio.centre = c;
         if self.listen != 0 {
             listen(app, 0);
@@ -266,7 +309,9 @@ impl View for Scope {
         if !down {
             return;
         }
-        if self.listen != 0 {
+        if from_hf(app) {
+            app.show_toast(b"HF waterfall", b"OK tunes to marker", false);
+        } else if self.listen != 0 {
             tune(app, self.freq(app));
             app.send_slot(app.active); // the transmit's way home stops the scope (MODE-1)
             super::nav::transmit(app);
@@ -279,6 +324,9 @@ impl View for Scope {
     /// its squelch closes) or log it.
     fn tick(self, app: &mut App, live: &LiveAll) {
         let ModeLive::Scope { centre, bars, n, sweeps, open, .. } = live.mode else { return };
+        if from_hf(app) && centre != app.radio.centre {
+            return;
+        }
         let n = (n as usize).clamp(1, SCOPE_BARS);
         let (floor, pk) = floor_peak(&bars[..n]);
         let mut s = Scope { peak: pk.unwrap_or(255), ..self };
@@ -312,8 +360,9 @@ impl View for Scope {
 
     fn render(self, app: &mut App, lcd: &mut impl Panel, cx: &Cx<impl ChannelStore>) {
         let step = step_of(app);
+        let hf = from_hf(app);
         let (centre, bars, n, sweeps, open) = match cx.live.mode {
-            ModeLive::Scope { centre, bars, n, sweeps, open, .. } => (centre, bars, (n as usize).clamp(1, SCOPE_BARS), sweeps, open),
+            ModeLive::Scope { centre, bars, n, sweeps, open, .. } if !hf || centre == app.radio.centre => (centre, bars, (n as usize).clamp(1, SCOPE_BARS), sweeps, open),
             _ => (app.radio.centre, [0; SCOPE_BARS], bars_n(app), 0, false),
         };
         let bw = (240 / n as i32).max(1);
@@ -399,8 +448,12 @@ impl View for Scope {
             });
         }
         // Waterfall (0 3 1 5): one row per sweep, wrapping; the next row's place shows dark.
-        let wf = app.set.scope_wf;
-        if app.dirty(10, Mix::new().h(&wf).h(&wf.then_some(sweeps)).get()) {
+        let wf = hf || app.set.scope_wf;
+        if hf && app.dirty(R_TOP, centre) {
+            lcd.fill(0, WF_Y, 240, WF_ROWS * 3, BG);
+        }
+        let frame = hf.then_some(centre);
+        if app.dirty(10, Mix::new().h(&wf).h(&wf.then_some(sweeps)).h(&frame).get()) {
             if wf {
                 let row = (sweeps as i32) % WF_ROWS;
                 let y = WF_Y + row * 3;
@@ -422,7 +475,7 @@ impl View for Scope {
         let mut p = Buf::<40>::new();
         if self.listen != 0 {
             p.push(if open { b"Signal" } else { b"Quiet " });
-            p.push(" \u{b7} PTT talks here".as_bytes());
+            p.push(if hf { " \u{b7} Listen only" } else { " \u{b7} PTT talks here" }.as_bytes());
         } else {
             p.push(b"Strongest ");
             match pk {
@@ -462,6 +515,13 @@ impl View for Scope {
     }
 
     fn hints(self, _: &App) -> Hints {
+        if self.hf {
+            return if self.listen == 0 {
+                Hints::new(&[(ARROWS_LR, "Marker"), ("#", "Peak"), ("OK", "Tune")])
+            } else {
+                Hints::new(&[("BACK", "Sweep"), ("OK", "Tune")])
+            };
+        }
         match self.listen {
             0 => Hints::new(&[(ARROWS_LR, "Marker"), ("SIDE1", "Listen"), ("OK", "Go")]),
             1 => Hints::new(&[("PTT", "Talk"), ("SIDE1", "Stop"), ("OK", "Go")]),

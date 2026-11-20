@@ -29,7 +29,7 @@ async fn part_read_wait(addr: u32, buf: &mut [u8]) -> Result<(), si4732::Error> 
 impl Radio {
     /// HF mode on, retuned or off (HF-3, HF-4, HF-10, HF-11): the SI4732 below 18 MHz, chip 1 through the
     /// energised relay from 18 MHz (decision 322, as stock and nicFW). Watch, scan and the other chip pause meanwhile (HF-8).
-    pub(super) async fn hf(&mut self, freq: Freq10, mode: u8, on: bool) {
+    pub(super) async fn hf(&mut self, freq: Freq10, mode: u8, on: bool, keep_rx: bool) {
         self.seek_cancel(); // HF-31: a retune or off ends a seek
         if !on {
             if self.hf.take().is_some_and(|h| h.si) {
@@ -37,10 +37,10 @@ impl Radio {
             }
             self.tuned = [None; 2];
             self.live.mode = ModeLive::Off;
-            let f = self.slots[self.active as usize].freq;
-            let mut s = Steps::default();
-            let _ = self.path.rx(Rx::Bk(Sel::rx(f)), Cause::HfReceiver, now_ms() as u32, &mut s);
-            self.run(&s).await;
+            if !keep_rx {
+                let f = self.slots[self.active as usize].freq;
+                self.select_rx(f, Cause::HfReceiver).await;
+            }
             log(b"hf off", 0);
             return;
         }

@@ -51,7 +51,7 @@ fn hf_channels_open_hf_mode() {
     }
     assert!(matches!(t.app.screen(), Screen::Hf(_)), "{:?}", t.app.screen());
     assert_eq!((t.app.set.hf.freq, t.app.set.hf.mode), (707_500, 2), "AM without the patch");
-    assert!(t.cmds().contains(&RadioCmd::Hf { freq: 707_500, mode: 2, on: true }));
+    assert!(t.cmds().contains(&RadioCmd::Hf { freq: 707_500, mode: 2, on: true, keep_rx: false }));
     assert!(!t.app.slot(0).ch.is_some_and(|c| c.is_hf()), "the slot stays where it was");
 }
 

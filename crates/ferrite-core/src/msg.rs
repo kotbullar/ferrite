@@ -128,7 +128,8 @@ pub enum RadioCmd {
     /// The band scope's points per sweep and dwell per point in 0.1 ms (SCOPE-9, 0 3 1 3); sent before a sweep.
     /// Apart from [`RadioCmd::Sweep`] so a command stays 8 bytes. `strip`: the sweep is home's strip, which keeps
     /// looking at the active slot's own frequency and holds there on a carrier (MODE-5, decision 115).
-    ScopeCfg { bars: u8, dwell: u8, strip: bool },
+    /// `hf`: the scope was opened by HF mode on its BK4829 path.
+    ScopeCfg { bars: u8, dwell: u8, strip: bool, hf: bool },
     /// A key or knob step while the scope or home's strip sweeps: the sweep waits and its pass starts again, so the
     /// UI handles the input first (SCOPE-14, `ferrite_core::sweephold`).
     SweepHold,
@@ -151,7 +152,8 @@ pub enum RadioCmd {
     /// powers the SI4732 up with the SSB patch and pauses watch, scan, decoders, jobs and beacons; leaving undoes
     /// all of it (HF-8). The receiver follows from frequency and mode (HF-10), and the relay from the receiver:
     /// energised for chip 1, released for the SI4732 (HF-11).
-    Hf { freq: Freq10, mode: u8, on: bool },
+    /// On exit, `keep_rx` hands the current relay path to the HF scope.
+    Hf { freq: Freq10, mode: u8, on: bool, keep_rx: bool },
     /// The SI4732's receive settings (BCR-32, HF-35; decision 292): applied when it powers up and whenever they
     /// change while it runs.
     SiOpts(SiOpts),

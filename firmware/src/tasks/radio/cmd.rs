@@ -12,7 +12,12 @@ impl Radio {
         }
         let Some(h) = self.lease.expired(now_ms() as u32) else { return };
         log(b"mode lease ran out, stopped ", h as u32);
+        let restore_rx = self.scope.as_ref().is_some_and(|scope| scope.hf);
         self.cmd(h.stop_cmd()).await;
+        if restore_rx {
+            let f = self.slots[self.active as usize].freq;
+            self.select_rx(f, Cause::HfReceiver).await;
+        }
         self.live.lease_drops = self.live.lease_drops.wrapping_add(1);
     }
 
@@ -182,7 +187,7 @@ impl Radio {
                 }
             }
             RadioCmd::BcastSlot(s) => self.bcast_slot = s,
-            RadioCmd::Hf { freq, mode, on } => self.hf(freq, mode, on).await,
+            RadioCmd::Hf { freq, mode, on, keep_rx } => self.hf(freq, mode, on, keep_rx).await,
             RadioCmd::HfSeek { up } => self.hf_seek(up),
             RadioCmd::SiOpts(o) => {
                 // BCR-32, HF-35: kept for the next power-up, and applied now if the SI4732 runs
@@ -259,7 +264,7 @@ impl Radio {
             | RadioCmd::DtmfSend { .. } => {}
             // Not on the radio yet, each waiting on something named in the manual's Status lines: band scope,
             // tone search, crossband (chapters 21, 22, 19): their own exclusive modes, after 2d.
-            RadioCmd::ScopeCfg { bars, dwell, strip } => self.scope_cfg = (bars, dwell, strip),
+            RadioCmd::ScopeCfg { bars, dwell, strip, hf } => self.scope_cfg = (bars, dwell, strip, hf),
             RadioCmd::Sweep { centre, step, on } => {
                 self.sweep_hold.clear();
                 self.scope(centre, step, on).await

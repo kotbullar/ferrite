@@ -33,7 +33,7 @@ impl Held {
             Held::Scope => RadioCmd::Sweep { centre: 0, step: 0, on: false },
             Held::Counter => RadioCmd::Counter(false),
             Held::Broadcast => RadioCmd::Broadcast(BroadcastCmd::Off),
-            Held::Hf => RadioCmd::Hf { freq: 0, mode: 0, on: false },
+            Held::Hf => RadioCmd::Hf { freq: 0, mode: 0, on: false, keep_rx: false },
             Held::Crossband => RadioCmd::Crossband(None),
             Held::ToneSearch => RadioCmd::ToneSearch { slot: 0, on: false },
             Held::Sat => RadioCmd::SatRx(0),
@@ -159,7 +159,7 @@ mod tests {
             (RadioCmd::Sweep { centre: 14_652_000, step: 2500, on: true }, Held::Scope),
             (RadioCmd::Counter(true), Held::Counter),
             (RadioCmd::Broadcast(BroadcastCmd::Fm(10_110)), Held::Broadcast),
-            (RadioCmd::Hf { freq: 707_500, mode: 2, on: true }, Held::Hf),
+            (RadioCmd::Hf { freq: 707_500, mode: 2, on: true, keep_rx: false }, Held::Hf),
             (RadioCmd::ToneSearch { slot: 1, on: true }, Held::ToneSearch),
         ];
         for (c, h) in starts {
@@ -208,7 +208,7 @@ mod tests {
             RadioCmd::Sweep { centre: 1, step: 1, on: true },
             RadioCmd::Counter(true),
             RadioCmd::Broadcast(BroadcastCmd::Fm(9_810)),
-            RadioCmd::Hf { freq: 1, mode: 0, on: true },
+            RadioCmd::Hf { freq: 1, mode: 0, on: true, keep_rx: false },
             RadioCmd::Crossband(Some(XbCfg::DEFAULT)),
             RadioCmd::ToneSearch { slot: 0, on: true },
         ];
