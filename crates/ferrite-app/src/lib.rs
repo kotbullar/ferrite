@@ -272,7 +272,8 @@ const ALERT_WAIT: u8 = 2;
 pub struct App {
     screen: Screen,
     slots: [Slot; SLOTS],
-    rf_gain: u8,
+    /// None disables the quick adjustment; Some(0) is automatic gain.
+    rf_gain: Option<u8>,
     active: u8,
     /// The slot the PTT being pressed keys ([`App::ptt_target`]).
     pub(crate) ptt_slot: u8,
@@ -472,7 +473,7 @@ impl App {
             screen: Screen::Home,
             slots: [Slot::new(mhz(146) + 52_000), Slot::new(mhz(443) + 47_500), Slot::new(mhz(118) + 95_000)],
             active: 0,
-            rf_gain: 0,
+            rf_gain: Some(0),
             ptt_slot: 0,
             qmenu: None,
             ptt_block: 0,
@@ -2033,15 +2034,29 @@ impl App {
     }
 
     pub(crate) fn rf_gain_text(&self) -> &'static [u8] {
-        [b"Auto".as_slice(), b"1 / 4", b"2 / 4", b"3 / 4", b"4 / 4"][self.rf_gain as usize]
+        match self.rf_gain {
+            None => b"Off",
+            Some(gain) => [b"Auto".as_slice(), b"1 / 4", b"2 / 4", b"3 / 4", b"4 / 4"][gain as usize],
+        }
     }
 
-    pub(crate) fn step_rf_gain(&mut self, d: i32) {
-        let gain = i32::from(self.rf_gain).saturating_add(d).clamp(0, 4) as u8;
-        if gain != self.rf_gain {
-            self.rf_gain = gain;
-            self.out.push(RadioCmd::RfGain(gain));
+    pub(crate) fn set_rf_gain(&mut self, gain: Option<u8>) {
+        let before = self.rf_gain.unwrap_or(0);
+        let after = gain.unwrap_or(0);
+        self.rf_gain = gain;
+        if before != after {
+            self.out.push(RadioCmd::RfGain(after));
         }
+    }
+
+    pub(crate) fn step_rf_gain(&mut self, d: i32, from_home: bool) {
+        if from_home && self.rf_gain.is_none() {
+            return;
+        }
+        let min = if from_home { 0 } else { -1 };
+        let current = self.rf_gain.map_or(-1, i32::from);
+        let next = current.saturating_add(d).clamp(min, 4);
+        self.set_rf_gain(u8::try_from(next).ok());
     }
 
     /// SIDE1 + knob / ▲▼: the live level one step up or down, stopping at 0 and 9 (SQL-3). A channel on Global

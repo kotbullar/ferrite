@@ -115,6 +115,27 @@ fn rf_gain_menu_shares_the_home_setting() {
     assert!(r.take_cmds().contains(&RadioCmd::RfGain(0)));
 }
 
+/// MENU-35: Off restores automatic gain and only the menu can re-enable the shortcut.
+#[test]
+fn rf_gain_off_restores_agc_and_disables_the_home_chord() {
+    let mut r = Radio::new();
+    r.menu("").press(Key::Side(2)).knob(2);
+    assert!(r.take_cmds().contains(&RadioCmd::RfGain(2)));
+    r.knob(-3).expect_text("Off");
+    assert!(r.take_cmds().contains(&RadioCmd::RfGain(0)));
+
+    r.home();
+    let freq = r.sim.app().slot(0).freq();
+    r.down(Key::Side(2)).knob(4).up(Key::Side(2)).expect_text("Off");
+    assert_eq!(r.sim.app().slot(0).freq(), freq);
+    assert!(!r.take_cmds().iter().any(|cmd| matches!(cmd, RadioCmd::RfGain(_))));
+
+    r.press(Key::Menu).press(Key::Side(2)).knob(1).expect_text("Auto");
+    assert!(!r.take_cmds().iter().any(|cmd| matches!(cmd, RadioCmd::RfGain(_))));
+    r.home().down(Key::Side(2)).knob(1).up(Key::Side(2));
+    assert!(r.take_cmds().contains(&RadioCmd::RfGain(1)));
+}
+
 /// RX and TX tones are set apart in the tone picker (VFO-6, TONE-17's page of the picker): ▶ gives RX a mode (TONE-2.1), the knob its value.
 #[test]
 fn rx_and_tx_tones_apart() {

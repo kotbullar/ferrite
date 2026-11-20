@@ -485,7 +485,7 @@ impl View for Home {
                 app.show_toast(b"RF gain", b"BK4829 only", false);
                 return;
             }
-            app.step_rf_gain(d);
+            app.step_rf_gain(d, true);
             app.show_toast(b"RF gain", app.rf_gain_text(), false);
             return;
         }
