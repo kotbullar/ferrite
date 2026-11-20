@@ -5,7 +5,7 @@ members = ["crates/ferrite-core", "crates/ferrite-ui", "crates/ferrite-app", "cr
 default-members = ["crates/ferrite-core", "crates/ferrite-ui", "crates/ferrite-app", "crates/ferrite-store", "crates/ferrite-checks", "crates/ferrite-radio", "sim", "drivers/bus", "drivers/bk4829", "drivers/si4732", "drivers/st7789", "drivers/w25q", "drivers/keypad", "drivers/nmea", "digimodes/udsp", "digimodes/ufx25", "digimodes/uafsk", "digimodes/upocsag", "digimodes/udsc", "digimodes/uaprs"]
 
 [workspace.package]
-version = "0.9.4-beta.3"
+version = "0.9.4-beta.4"
 edition = "2021"
 license = "PolyForm-Noncommercial-1.0.0"
 repository = "https://github.com/FerriteFW/ferrite"

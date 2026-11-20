@@ -76,7 +76,7 @@ impl View for Quick {
             (Key::Digit(d), Short) => app.screen = Screen::Quick(Quick { row: d - 1 }), // MENU-5
             (Key::Side(2), Short) => app.screen = Screen::Quick(Quick { row: RF_GAIN_ROW }),
             (Key::Menu, Short) if row == RF_GAIN_ROW => {}
-            (Key::Hash, Short) if row == RF_GAIN_ROW => app.step_rf_gain(-i32::from(app.rf_gain)),
+            (Key::Hash, Short) if row == RF_GAIN_ROW => app.set_rf_gain(Some(0)),
             (Key::Menu, Short) => match item {
                 Item::Advanced => to_advanced(app),
                 // TSRCH-16: a tone hint: OK uses the heard tone for RX, then asks about TX.
@@ -107,7 +107,7 @@ impl View for Quick {
             return;
         }
         if self.row == RF_GAIN_ROW {
-            app.step_rf_gain(d);
+            app.step_rf_gain(d, false);
         } else {
             app.change(slot_item(self.row), d);
         }
@@ -151,14 +151,14 @@ impl View for Quick {
                 num: if gain { None } else if i == MORE_ROW { Some(0) } else { Some(i + 1) },
                 name: if gain { b"PF2  RF gain" } else { item.name().as_bytes() },
                 value: v.as_bytes(),
-                dot: if gain { app.rf_gain != 0 } else { !app.is_default(item) },
+                dot: if gain { app.rf_gain != Some(0) } else { !app.is_default(item) },
                 selected: i == row,
                 grey: !gain && app.greyed(item).is_some(),
             };
             app.menu_row(lcd, i as usize, 41 + 20 * i as i32, 20, &r);
         }
         if row == RF_GAIN_ROW {
-            app.help_note(lcd, 265, 33, super::groups::Help::Note(Some(txt!("Receiver gain. Home: SIDE2 + knob."))), b"");
+            app.help_note(lcd, 265, 33, super::groups::Help::Note(Some(txt!("Off disables SIDE2 + knob on home."))), b"");
             return;
         }
         let item = slot_item(row);
