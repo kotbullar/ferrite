@@ -25,6 +25,7 @@ use ferrite_ui::assets::*;
 use ferrite_ui::gfx::*;
 use ferrite_ui::panel::Panel;
 use ferrite_ui::text::Buf;
+use ferrite_ui::theme;
 use ferrite_ui::widgets as w;
 use ufmt::uwrite;
 
@@ -429,6 +430,8 @@ impl View for Scope {
                         GREEN
                     } else if lh > 0 && h >= lh {
                         RED
+                    } else if hf {
+                        BLUE
                     } else {
                         rgb565(0x4D, 0x80, 0xC0)
                     };
@@ -457,8 +460,10 @@ impl View for Scope {
             if wf {
                 let row = (sweeps as i32) % WF_ROWS;
                 let y = WF_Y + row * 3;
+                let palette = theme::get();
                 for (i, &v) in bars[..n].iter().enumerate() {
-                    lcd.fill(i as i32 * bw, y, bw, 3, heat(v));
+                    let color = if hf { hf_heat(v, palette) } else { heat(v) };
+                    lcd.fill(i as i32 * bw, y, bw, 3, color);
                 }
                 let ny = WF_Y + ((row + 1) % WF_ROWS) * 3;
                 lcd.fill(0, ny, 240, 3, BG);
@@ -549,6 +554,25 @@ pub fn khz(f: u32, b: &mut Buf<40>) {
     }
 }
 
+/// The HF waterfall uses theme roles. Night Red keeps a graded ramp so it can
+/// show signal strength as brightness even though its accent roles share a hue.
+fn hf_heat(v: u8, palette: u8) -> u16 {
+    if v == 0 {
+        return BG;
+    }
+    if palette == theme::NIGHT_RED {
+        return heat(v);
+    }
+    match parts::level_h(v, 8) {
+        0 | 1 => SURFACE,
+        2 => LINE,
+        3 | 4 => BLUE,
+        5 | 6 => GREEN,
+        _ if palette == theme::CYBERPUNK => VIOLET,
+        _ => AMBER,
+    }
+}
+
 /// Waterfall colour for a level: dark blue through teal and green to amber.
 pub fn heat(v: u8) -> u16 {
     match parts::level_h(v, 8) {
@@ -615,6 +639,30 @@ pub fn strip_off(app: &mut App, lcd: &mut impl Panel, region: usize, y: i32, h: 
 #[cfg(test)]
 mod floor_tests {
     use super::*;
+
+    /// HF-36: the waterfall preserves distinct levels in each display theme.
+    #[test]
+    fn hf_waterfall_uses_the_theme_palette() {
+        let previous = theme::get();
+        let levels = [35, 55, 75, 100, 130];
+        for palette in [theme::DARK, theme::DAYLIGHT, theme::NIGHT_RED, theme::CYBERPUNK] {
+            theme::set(palette);
+            assert_eq!(theme::map(hf_heat(0, palette)), theme::map(BG));
+            let colors = levels.map(|v| theme::map(hf_heat(v, palette)));
+            for (i, &color) in colors.iter().enumerate() {
+                assert!(!colors[..i].contains(&color), "theme {palette}: duplicate level {i}");
+            }
+            if palette == theme::NIGHT_RED {
+                assert!(colors.iter().all(|&c| c & 0x07ff == 0), "red only");
+                assert!(colors.windows(2).all(|pair| pair[0] < pair[1]), "brighter for stronger signals");
+            } else {
+                assert_eq!(colors[2], theme::map(BLUE));
+                assert_eq!(colors[3], theme::map(GREEN));
+                assert_eq!(colors[4], theme::map(if palette == theme::CYBERPUNK { VIOLET } else { AMBER }));
+            }
+        }
+        theme::set(previous);
+    }
 
     /// SCOPE-8: bars stand on the noise floor: the floor is the lowest bar of the sweep (blank points left out),
     /// each bar's height is its level above that, the floor bar still a pixel tall, a strong one capped at the
