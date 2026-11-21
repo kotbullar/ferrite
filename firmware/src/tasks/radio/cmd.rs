@@ -62,6 +62,17 @@ impl Radio {
             }
             RadioCmd::Watch(m) => self.watch_set = m,
             RadioCmd::Awake(m) => self.keep = m,
+            RadioCmd::RfGain(gain) => {
+                self.rf_gain = gain.min(4);
+                self.rf_gain_pending = self.chips;
+                if self.path.keyed().is_none() {
+                    for n in 0..2 {
+                        if self.tuned[n as usize].is_some() {
+                            self.apply_rf_gain(n);
+                        }
+                    }
+                }
+            }
             RadioCmd::AprsSlot(m) => {
                 // APRS-55: a slot that gains or loses APRS retunes, for the receive set-up (the unkey retunes anyway).
                 let changed = self.aprs_slots ^ m;

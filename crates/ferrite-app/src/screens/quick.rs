@@ -1,5 +1,5 @@
 //! Quick settings (MENU on home; manual chapter 11, MENU-1 and MENU-12 to MENU-22; MenuQuick mock-up): the
-//! active slot's nine settings and "0 More". The knob or ◀▶ change the highlighted value live. On a slot in
+//! active slot's settings, RF gain and "0 More". The knob or ◀▶ change the highlighted value live. On a slot in
 //! the broadcast band the rows are FM's own (step, AGC, radio monitor, sleep timer: BCR-28).
 
 use super::advanced::Advanced;
@@ -21,8 +21,16 @@ use ufmt::uwrite;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Quick {
-    /// The highlighted row, 0-9 (9 is "0 More").
+    /// The highlighted row.
     pub row: u8,
+}
+
+pub(crate) const RF_GAIN_ROW: u8 = QUICK.len() as u8 - 1;
+pub(crate) const MORE_ROW: u8 = RF_GAIN_ROW + 1;
+const ROW_COUNT: u8 = MORE_ROW + 1;
+
+fn slot_item(row: u8) -> Item {
+    QUICK[row.min(RF_GAIN_ROW) as usize]
 }
 
 impl View for Quick {
@@ -60,12 +68,15 @@ impl View for Quick {
             }
             return;
         }
-        let item = QUICK[row as usize];
+        let item = slot_item(row);
         match (e.key, e.press) {
-            (Key::Up, Short | Repeat) => app.screen = Screen::Quick(Quick { row: (row + 9) % 10 }),
-            (Key::Down, Short | Repeat) => app.screen = Screen::Quick(Quick { row: (row + 1) % 10 }),
+            (Key::Up, Short | Repeat) => app.screen = Screen::Quick(Quick { row: (row + ROW_COUNT - 1) % ROW_COUNT }),
+            (Key::Down, Short | Repeat) => app.screen = Screen::Quick(Quick { row: (row + 1) % ROW_COUNT }),
             (Key::Digit(0), Short) => to_advanced(app),
             (Key::Digit(d), Short) => app.screen = Screen::Quick(Quick { row: d - 1 }), // MENU-5
+            (Key::Side(2), Short) => app.screen = Screen::Quick(Quick { row: RF_GAIN_ROW }),
+            (Key::Menu, Short) if row == RF_GAIN_ROW => {}
+            (Key::Hash, Short) if row == RF_GAIN_ROW => app.set_rf_gain(Some(0)),
             (Key::Menu, Short) => match item {
                 Item::Advanced => to_advanced(app),
                 // TSRCH-16: a tone hint: OK uses the heard tone for RX, then asks about TX.
@@ -95,7 +106,11 @@ impl View for Quick {
             }
             return;
         }
-        app.change(QUICK[self.row as usize % QUICK.len()], d);
+        if self.row == RF_GAIN_ROW {
+            app.step_rf_gain(d, false);
+        } else {
+            app.change(slot_item(self.row), d);
+        }
     }
 
     fn render(self, app: &mut App, lcd: &mut impl Panel, cx: &Cx<impl ChannelStore>) {
@@ -128,22 +143,28 @@ impl View for Quick {
             w::field(lcd, 200, 32, 21, 39, 35, m.as_bytes(), const { &w::st(&UI_12, SUB, BG, Align::Right) });
             lcd.fill(0, 40, 240, 1, LINE);
         }
-        for (i, item) in QUICK.into_iter().enumerate() {
-            let v = row_value(app, item);
+        for i in 0..ROW_COUNT {
+            let item = slot_item(i);
+            let gain = i == RF_GAIN_ROW;
+            let v = if gain { Buf::from(app.rf_gain_text()) } else { row_value(app, item) };
             let r = Row {
-                num: Some(((i + 1) % 10) as u8),
-                name: item.name().as_bytes(),
+                num: if gain { None } else if i == MORE_ROW { Some(0) } else { Some(i + 1) },
+                name: if gain { b"PF2  RF gain" } else { item.name().as_bytes() },
                 value: v.as_bytes(),
-                dot: !app.is_default(item),
-                selected: i as u8 == row,
-                grey: app.greyed(item).is_some(),
+                dot: if gain { app.rf_gain != Some(0) } else { !app.is_default(item) },
+                selected: i == row,
+                grey: !gain && app.greyed(item).is_some(),
             };
-            app.menu_row(lcd, i, 41 + 22 * i as i32, 22, &r); // ten rows: 22 px, the menus' text (decision 372)
+            app.menu_row(lcd, i as usize, 41 + 20 * i as i32, 20, &r);
         }
-        let item = QUICK[row as usize];
+        if row == RF_GAIN_ROW {
+            app.help_note(lcd, 265, 33, super::groups::Help::Note(Some(txt!("Off disables SIDE2 + knob on home."))), b"");
+            return;
+        }
+        let item = slot_item(row);
         let why = app.greyed(item);
         let mut p = Buf::<16>::new();
-        let _ = uwrite!(p, "MENU {}", (row + 1) % 10);
+        let _ = uwrite!(p, "MENU {}", if row == MORE_ROW { 0 } else { row + 1 });
         use super::groups::Help;
         let help = match why {
             _ if item == Item::Tones && heard(app) != 0 => Help::Why("OK uses the heard tone."),
@@ -161,11 +182,13 @@ impl View for Quick {
                 Hints::new(&[(ARROWS_UD, "Move"), ("Knob", "Change"), ("BACK", "Back")])
             };
         }
-        if app.undo.is_some() {
+        if self.row == RF_GAIN_ROW {
+            Hints::new(&[(ARROWS_UD, "Move"), ("Knob", "Change"), ("#", "Auto")])
+        } else if app.undo.is_some() {
             Hints::new(&[("Knob", "Change"), ("*", "Undo"), ("BACK", "Back")])
-        } else if self.row == 9 {
+        } else if self.row == MORE_ROW {
             Hints::new(&[(ARROWS_UD, "Move"), ("OK", "Open"), ("BACK", "Back")])
-        } else if QUICK[self.row as usize] == Item::Tones && heard(app) != 0 {
+        } else if slot_item(self.row) == Item::Tones && heard(app) != 0 {
             Hints::new(&[(ARROWS_UD, "Move"), ("OK", "Use heard"), ("BACK", "Back")])
         } else {
             Hints::new(&[(ARROWS_UD, "Move"), ("Knob", "Change"), ("BACK", "Back")])

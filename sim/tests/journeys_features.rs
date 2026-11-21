@@ -75,7 +75,7 @@ fn reverse() {
     r.run("hold STAR; press PTTA; press BACK; expect no text \"R-600k\"; expect text \"-600k\"");
 }
 
-/// The knob steps by the slot's step, SIDE2 + knob by 1 MHz, and ◀▶ step bands (VFO-5).
+/// The knob steps by the slot's step, SIDE2 + ▲▼ by 1 MHz, and ◀▶ step bands (VFO-5).
 #[test]
 fn tuning_steps() {
     let mut r = Radio::new();
@@ -85,9 +85,55 @@ fn tuning_steps() {
     assert!(f(&r) > f0 && f(&r) - f0 <= 2_500, "one step up: {} -> {}", f0, f(&r));
     let f1 = f(&r);
     r.down(Key::Side(2)).knob(1).up(Key::Side(2)).wait(200);
-    assert_eq!(f(&r), f1 + mhz(1), "SIDE2 + knob: 1 MHz");
+    assert_eq!(f(&r), f1, "RF gain must leave the frequency alone");
+    assert!(r.take_cmds().contains(&RadioCmd::RfGain(1)));
+    r.down(Key::Side(2)).knob(-1).up(Key::Side(2)).wait(200);
+    assert!(r.take_cmds().contains(&RadioCmd::RfGain(0)), "back to automatic");
+    r.down(Key::Side(2)).press(Key::Up).up(Key::Side(2)).wait(200);
+    assert_eq!(f(&r), f1 + mhz(1), "SIDE2 + Up: 1 MHz");
     r.press(Key::Right);
     assert!(f(&r) > mhz(150), "▶ to the next band up: {}", f(&r));
+}
+
+/// MENU-35: PF2 selects the shared RF gain in Quick settings, and # resets it.
+#[test]
+fn rf_gain_menu_shares_the_home_setting() {
+    let mut r = Radio::new();
+    r.down(Key::Side(2)).knob(2).up(Key::Side(2));
+    r.press(Key::Menu).press(Key::Side(2)).expect_text("RF gain").expect_text("2 / 4");
+    r.take_cmds();
+    // Hold a click on the right half of the virtual knob across several frames.
+    r.sim.set_scale(2);
+    for _ in 0..6 {
+        r.sim.mouse(320, 20, true);
+        r.wait(16);
+    }
+    r.sim.mouse(320, 20, false);
+    r.expect_text("3 / 4");
+    assert!(r.take_cmds().contains(&RadioCmd::RfGain(3)));
+    r.press(Key::Hash).expect_text("Auto");
+    assert!(r.take_cmds().contains(&RadioCmd::RfGain(0)));
+}
+
+/// MENU-35: Off restores automatic gain and only the menu can re-enable the shortcut.
+#[test]
+fn rf_gain_off_restores_agc_and_disables_the_home_chord() {
+    let mut r = Radio::new();
+    r.menu("").press(Key::Side(2)).knob(2);
+    assert!(r.take_cmds().contains(&RadioCmd::RfGain(2)));
+    r.knob(-3).expect_text("Off");
+    assert!(r.take_cmds().contains(&RadioCmd::RfGain(0)));
+
+    r.home();
+    let freq = r.sim.app().slot(0).freq();
+    r.down(Key::Side(2)).knob(4).up(Key::Side(2)).expect_text("Off");
+    assert_eq!(r.sim.app().slot(0).freq(), freq);
+    assert!(!r.take_cmds().iter().any(|cmd| matches!(cmd, RadioCmd::RfGain(_))));
+
+    r.press(Key::Menu).press(Key::Side(2)).knob(1).expect_text("Auto");
+    assert!(!r.take_cmds().iter().any(|cmd| matches!(cmd, RadioCmd::RfGain(_))));
+    r.home().down(Key::Side(2)).knob(1).up(Key::Side(2));
+    assert!(r.take_cmds().contains(&RadioCmd::RfGain(1)));
 }
 
 /// RX and TX tones are set apart in the tone picker (VFO-6, TONE-17's page of the picker): ▶ gives RX a mode (TONE-2.1), the knob its value.

@@ -833,7 +833,10 @@ impl SimCore {
             let h = self.face.hits[i];
             match h.part {
                 Part::Power => self.power_switch(),
-                Part::Knob => self.knob(if x < h.x + h.w / 2 { -1 } else { 1 }),
+                Part::Knob => {
+                    self.knob(if x < h.x + h.w / 2 { -1 } else { 1 });
+                    self.mouse = Some(i);
+                }
                 Part::Key(_) | Part::Ptt(_) => {
                     if let Part::Ptt(n) = h.part {
                         self.tx = Some(n);
@@ -848,11 +851,12 @@ impl SimCore {
             }
         } else if !down {
             if let Some(i) = self.mouse.take() {
-                if let Part::Ptt(_) = self.face.hits[i].part {
+                let part = self.face.hits[i].part;
+                if let Part::Ptt(_) = part {
                     self.tx = None;
                 }
-                if self.live() {
-                    self.app.key_up(key_of(self.face.hits[i].part), self.now, &*self.store);
+                if matches!(part, Part::Key(_) | Part::Ptt(_)) && self.live() {
+                    self.app.key_up(key_of(part), self.now, &*self.store);
                 }
             }
         }

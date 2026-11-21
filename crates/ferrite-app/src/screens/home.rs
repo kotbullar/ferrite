@@ -456,8 +456,7 @@ impl View for Home {
             (Key::Menu, Short) => app.screen = Screen::Quick(super::quick::Quick { row: 0 }), // MENU-1
             (Key::Menu, Long) => app.screen = Screen::Advanced(super::advanced::Advanced { row: 0, from_quick: false }), // MENU-2
             (Key::Side(2), Short) => super::scan::side2(app, store), // SCAN-1
-            // KEY-22: SIDE2 held alone opens the frequency counter when it comes up; SIDE2 + knob or ▲▼ (big
-            // steps) never does, whenever the knob turns.
+            // KEY-22: SIDE2 held alone opens the frequency counter on release. Using it for RF gain or big steps consumes it.
             (Key::Side(2), LongUp) => app.open(Dest::Counter),
             (Key::Side(1), Short | Long) => app.monitor_key(e.press), // SQL-9
             // KEY-18, SCAN-11: on a scanning slot \* skips the hit, as on the scan screen; otherwise quick mute.
@@ -480,11 +479,17 @@ impl View for Home {
         if app.keys.is_held(Key::Side(1)) {
             return super::squelch::step(app, d);
         }
-        let big = app.keys.is_held(Key::Side(2));
-        if big {
+        if app.keys.is_held(Key::Side(2)) {
             app.keys.used(Key::Side(2));
+            if app.bcast_slot() == Some(app.active) {
+                app.show_toast(b"RF gain", b"BK4829 only", false);
+                return;
+            }
+            app.step_rf_gain(d, true);
+            app.show_toast(b"RF gain", app.rf_gain_text(), false);
+            return;
         }
-        step(app, d, big, store);
+        step(app, d, false, store);
     }
 
     /// Home is drawn on the panel and, under a closing quick menu, in a canvas's bands (qmenu::repaint): through a
