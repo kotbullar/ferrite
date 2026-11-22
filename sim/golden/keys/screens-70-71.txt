@@ -1,0 +1,98 @@
+## 70 D26 Snake
+MENU       -> =
+BACK       -> Home | VoxScreen(true)
+UP         -> =
+DOWN       -> =
+LEFT       -> =
+RIGHT      -> =
+ABC        -> =
+V/M        -> =
+STAR       -> =
+HASH       -> =
+0          -> =
+1          -> =
+2          -> =
+3          -> =
+4          -> =
+5          -> =
+6          -> =
+7          -> =
+8          -> =
+9          -> =
+SIDE1      -> = | Monitor { slot: 0, on: true } | toast "Monitor" "on: tap SIDE1 again"
+SIDE2      -> =
+hold MENU  -> = | toast "No options here" ""
+hold BACK  -> Home | VoxScreen(true)
+hold UP    -> =
+hold DOWN  -> =
+hold LEFT  -> =
+hold RIGHT -> =
+hold ABC   -> =
+hold V/M   -> =
+hold STAR  -> =
+hold HASH  -> = | popup "Keypad locked" "* all · 0 all but PTT"
+hold 0     -> =
+hold 1     -> =
+hold 2     -> =
+hold 3     -> =
+hold 4     -> =
+hold 5     -> =
+hold 6     -> =
+hold 7     -> =
+hold 8     -> =
+hold 9     -> =
+hold SIDE1 -> = | Monitor { slot: 0, on: true }; Monitor { slot: 0, on: false }
+hold SIDE2 -> =
+PTT        -> Home | TxPlan { tx: 14592000, region: 1, extend: false, confirmed: false }; Transmit { slot: 0, on: true }; Transmit { slot: 0, on: false }; PauseWatch(30); VoxScreen(true)
+knob +1    -> =
+knob -1    -> =
+
+## 71 D27 SOTA / POTA
+MENU       -> Text entry
+BACK       -> Home | VoxScreen(true)
+UP         -> =
+DOWN       -> =
+LEFT       -> =
+RIGHT      -> =
+ABC        -> =
+V/M        -> =
+STAR       -> =
+HASH       -> =
+0          -> =
+1          -> Text entry
+2          -> Text entry
+3          -> Event log
+4          -> =
+5          -> =
+6          -> =
+7          -> =
+8          -> =
+9          -> =
+SIDE1      -> = | Monitor { slot: 0, on: true } | toast "Monitor" "on: tap SIDE1 again"
+SIDE2      -> =
+hold MENU  -> = | toast "No options here" ""
+hold BACK  -> Home | VoxScreen(true)
+hold UP    -> =
+hold DOWN  -> =
+hold LEFT  -> =
+hold RIGHT -> =
+hold ABC   -> =
+hold V/M   -> =
+hold STAR  -> =
+hold HASH  -> = | popup "Keypad locked" "* all · 0 all but PTT"
+hold 0     -> =
+hold 1     -> =
+hold 2     -> =
+hold 3     -> =
+hold 4     -> =
+hold 5     -> =
+hold 6     -> =
+hold 7     -> =
+hold 8     -> =
+hold 9     -> =
+hold SIDE1 -> = | Monitor { slot: 0, on: true }; Monitor { slot: 0, on: false }
+hold SIDE2 -> =
+PTT        -> Home | TxPlan { tx: 14592000, region: 1, extend: false, confirmed: false }; Transmit { slot: 0, on: true }; Transmit { slot: 0, on: false }; PauseWatch(30); VoxScreen(true)
+knob +1    -> =
+knob -1    -> =
+

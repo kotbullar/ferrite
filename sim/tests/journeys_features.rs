@@ -75,7 +75,7 @@ fn reverse() {
     r.run("hold STAR; press PTTA; press BACK; expect no text \"R-600k\"; expect text \"-600k\"");
 }
 
-/// The knob steps by the slot's step, SIDE2 + knob by 1 MHz, and ◀▶ step bands (VFO-5).
+/// The knob steps by the slot's step, SIDE2 + ▲▼ by 1 MHz, and ◀▶ step bands (VFO-5).
 #[test]
 fn tuning_steps() {
     let mut r = Radio::new();
@@ -85,9 +85,55 @@ fn tuning_steps() {
     assert!(f(&r) > f0 && f(&r) - f0 <= 2_500, "one step up: {} -> {}", f0, f(&r));
     let f1 = f(&r);
     r.down(Key::Side(2)).knob(1).up(Key::Side(2)).wait(200);
-    assert_eq!(f(&r), f1 + mhz(1), "SIDE2 + knob: 1 MHz");
+    assert_eq!(f(&r), f1, "RF gain must leave the frequency alone");
+    assert!(r.take_cmds().contains(&RadioCmd::RfGain(1)));
+    r.down(Key::Side(2)).knob(-1).up(Key::Side(2)).wait(200);
+    assert!(r.take_cmds().contains(&RadioCmd::RfGain(0)), "back to automatic");
+    r.down(Key::Side(2)).press(Key::Up).up(Key::Side(2)).wait(200);
+    assert_eq!(f(&r), f1 + mhz(1), "SIDE2 + Up: 1 MHz");
     r.press(Key::Right);
     assert!(f(&r) > mhz(150), "▶ to the next band up: {}", f(&r));
+}
+
+/// MENU-35: PF2 selects the shared RF gain in Quick settings, and # resets it.
+#[test]
+fn rf_gain_menu_shares_the_home_setting() {
+    let mut r = Radio::new();
+    r.down(Key::Side(2)).knob(2).up(Key::Side(2));
+    r.press(Key::Menu).press(Key::Side(2)).expect_text("RF gain").expect_text("2 / 4");
+    r.take_cmds();
+    // Hold a click on the right half of the virtual knob across several frames.
+    r.sim.set_scale(2);
+    for _ in 0..6 {
+        r.sim.mouse(320, 20, true);
+        r.wait(16);
+    }
+    r.sim.mouse(320, 20, false);
+    r.expect_text("3 / 4");
+    assert!(r.take_cmds().contains(&RadioCmd::RfGain(3)));
+    r.press(Key::Hash).expect_text("Auto");
+    assert!(r.take_cmds().contains(&RadioCmd::RfGain(0)));
+}
+
+/// MENU-35: Off restores automatic gain and only the menu can re-enable the shortcut.
+#[test]
+fn rf_gain_off_restores_agc_and_disables_the_home_chord() {
+    let mut r = Radio::new();
+    r.menu("").press(Key::Side(2)).knob(2);
+    assert!(r.take_cmds().contains(&RadioCmd::RfGain(2)));
+    r.knob(-3).expect_text("Off");
+    assert!(r.take_cmds().contains(&RadioCmd::RfGain(0)));
+
+    r.home();
+    let freq = r.sim.app().slot(0).freq();
+    r.down(Key::Side(2)).knob(4).up(Key::Side(2)).expect_text("Off");
+    assert_eq!(r.sim.app().slot(0).freq(), freq);
+    assert!(!r.take_cmds().iter().any(|cmd| matches!(cmd, RadioCmd::RfGain(_))));
+
+    r.press(Key::Menu).press(Key::Side(2)).knob(1).expect_text("Auto");
+    assert!(!r.take_cmds().iter().any(|cmd| matches!(cmd, RadioCmd::RfGain(_))));
+    r.home().down(Key::Side(2)).knob(1).up(Key::Side(2));
+    assert!(r.take_cmds().contains(&RadioCmd::RfGain(1)));
 }
 
 /// RX and TX tones are set apart in the tone picker (VFO-6, TONE-17's page of the picker): ▶ gives RX a mode (TONE-2.1), the knob its value.
@@ -391,4 +437,94 @@ fn quick_mute() {
         assert!(!heard, "muted broadcast heard at {} ms", r.t);
     }
     r.expect_text("Muted");
+}
+
+/// SNAKE-1, SNAKE-2: launch from Tools, pause and restart, then return to Tools.
+#[test]
+fn snake_from_tools() {
+    let mut r = Radio::new();
+    r.menu("0 3 7").expect_screen("Snake").expect_text("Score 0").expect_text("Start");
+    r.press(Key::Menu).expect_text("Pause");
+    r.press(Key::Menu).wait(4_000).expect_text("Paused").expect_text("Resume");
+    r.press(Key::Menu).wait(4_000).expect_text("Game over").expect_text("Restart");
+    r.press(Key::Menu).expect_text("Score 0").expect_text("Pause");
+    r.press(Key::Exit).expect_screen("Settings group").expect_text("Snake");
+}
+
+/// VOX-15: the voice mic gain reaches the BK4829's maximum from the Transmit menu.
+#[test]
+fn microphone_gain_reaches_twelve() {
+    let mut r = Radio::new();
+    r.menu("0 8 3").expect_text("Mic gain");
+    r.take_cmds();
+    r.knob(7).expect_text("12");
+    assert!(r.take_cmds().contains(&RadioCmd::MicGain(12)));
+    r.knob(1);
+    assert!(!r.take_cmds().contains(&RadioCmd::MicGain(13)));
+    r.press(Key::Hash);
+    assert!(r.take_cmds().contains(&RadioCmd::MicGain(5)));
+}
+
+/// HF-36: the 27 MHz waterfall previews and selects frequencies in HF mode.
+#[test]
+fn hf_waterfall_tunes_the_marker_without_changing_home() {
+    let mut r = Radio::new();
+    let home = r.sim.app().slot(0).freq();
+    r.menu("0 3 3").wait(8000).expect_screen("HF mode");
+    r.type_("27*185").press(Key::Menu);
+    let centre = mhz(27) + 18_500;
+    assert_eq!(r.sim.app_mut().settings_mut().hf.freq, centre);
+    r.take_cmds();
+    r.press(Key::Menu).wait(500).expect_screen("Scope").expect_text("HF 2D");
+    let cmds = r.take_cmds();
+    assert!(cmds.iter().any(|c| matches!(c, RadioCmd::Hf { on: false, keep_rx: true, .. })));
+    assert!(cmds.iter().any(|c| matches!(c, RadioCmd::ScopeCfg { hf: true, strip: false, .. })));
+    let step = cmds.iter().find_map(|c| match c {
+        RadioCmd::Sweep { step, on: true, .. } => Some(*step),
+        _ => None,
+    }).expect("HF sweep started");
+    r.press(Key::Star).wait(500).expect_screen("Scope").expect_text("HF 3D");
+    let cmds = r.take_cmds();
+    assert!(!cmds.iter().any(|c| matches!(c, RadioCmd::ScopeCfg { .. } | RadioCmd::Sweep { .. } | RadioCmd::ScopeListen { .. })),
+        "changing the view leaves the receiver sweeping: {cmds:?}");
+    r.press(Key::Star).expect_screen("Scope").expect_text("HF 2D");
+    r.hold(Key::Star).expect_text("Peak hold");
+    r.press(Key::Star).expect_text("HF 3D").expect_text("Peak hold");
+    r.hold(Key::Side(2)).expect_text("Peak hold");
+    r.hold(Key::Star).expect_text("CENTER");
+    r.press(Key::Right).press(Key::Side(1)).expect_text("Listen");
+    let picked = centre + u32::from(step);
+    assert!(r.take_cmds().iter().any(|c| matches!(c, RadioCmd::ScopeListen { freq, .. } if *freq == picked)));
+    r.press(Key::Menu).expect_screen("HF mode");
+    assert_eq!(r.sim.app_mut().settings_mut().hf.freq, picked);
+    assert_eq!(r.sim.app().slot(0).freq(), home);
+    assert!(r.take_cmds().iter().any(|c| matches!(c, RadioCmd::Hf { freq, on: true, .. } if *freq == picked)));
+}
+
+/// An activation QSO is filed in the persistent log read by Console.
+#[test]
+fn activation_contact_survives_restart() {
+    use ferrite_app::data::{Data, Src};
+    use ferrite_sim::simcore::Stored;
+
+    for (source, keys, reference) in [
+        (Src::Pota, "44481#0001", "IT-0001"),
+        (Src::Sota, "444115556661#001", "I/LO-001"),
+    ] {
+        let mut r = Radio::new();
+        r.menu("0 3 8").expect_screen("SOTA / POTA").expect_text("Set reference");
+        r.press(Key::Menu).type_(keys).press(Key::Menu);
+        r.expect_screen("SOTA / POTA").expect_text(reference);
+        r.press(Key::Digit(2)).type_("2#1#2").press(Key::Menu).expect_screen("SOTA / POTA");
+        r.wait(250);
+        let image = r.sim.flash_image();
+        drop(r);
+
+        let r = Radio::with(Stored::Image(image));
+        let store = r.sim.store();
+        let qso = (0..store.events()).filter_map(|i| store.event(i)).find(|e| e.src == source).expect("activation QSO");
+        assert_eq!(qso.name.as_bytes(), b"A1A");
+        assert_eq!(qso.text.as_bytes(), reference.as_bytes());
+        assert_eq!(qso.freq, mhz(145) + 92_000, "the active slot's TX frequency");
+    }
 }

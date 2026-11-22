@@ -262,7 +262,7 @@ fn strip_sweeps_beside_the_broadcast() {
     c.extend(t.cmds());
     assert_eq!((t.app.radio.mode, t.app.radio.fm_on), (Mode::Strip, true), "{c:?}");
     assert!(c.contains(&RadioCmd::Broadcast(BroadcastCmd::Fm(10_050))), "{c:?}");
-    assert!(c.contains(&RadioCmd::ScopeCfg { bars: crate::screens::scope::STRIP_BARS as u8, dwell: 100, strip: true }), "{c:?}");
+    assert!(c.contains(&RadioCmd::ScopeCfg { bars: crate::screens::scope::STRIP_BARS as u8, dwell: 100, strip: true, hf: false }), "{c:?}");
     assert!(c.iter().any(|c| matches!(c, RadioCmd::Sweep { centre: TWO_M, on: true, .. })), "{c:?}");
     assert!(!t.app.strip_blocked());
     // the knob: the strip waits for it to rest; the broadcast plays on, untouched

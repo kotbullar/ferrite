@@ -116,6 +116,8 @@ pub enum Dest {
     Crossband,
     /// B21: squelch from home (SIDE1 + knob); a toast for now.
     Squelch,
+    Snake,
+    Activation,
 
     // ---- C: lists and data ----
     /// C1: the event log (MENU 0 4 1).
@@ -230,6 +232,8 @@ impl Dest {
             Alert => ("Alert", "23", "B17"),
             Crossband => ("Crossband repeater", "19", "B18"),
             Squelch => ("Squelch", "12", "B21"),
+            Activation => ("SOTA / POTA", "11", "D27"),
+            Snake => ("Snake", "11", "D26"),
             EventLog => ("Event log", "24", "C1"),
             EventDetail => ("Event detail", "27", "C2"),
             AprsHeard => ("APRS heard", "25", "C3"),
@@ -302,7 +306,7 @@ impl Dest {
 }
 
 /// Every destination once (groups and lists by one example each), for tests and the screen inventory.
-pub const ALL: [Dest; 69] = {
+pub const ALL: [Dest; 71] = {
     use Dest::*;
     [
         Entry(1), ChannelEdit, Value(Item::Squelch), Tones, Text(super::text::TextFor::Callsign), PositionEntry, SaveChannel, AddRepeater, RangePreset,
@@ -312,13 +316,13 @@ pub const ALL: [Dest; 69] = {
         Browse, Zones, RangePresets, SkipList, Waypoints, WaypointGo, GpsPosition, HfRecent, Quick,
         Advanced, Group(5), Sub(9, 1), Status, About, Calibration, KeyTest, AdvSquelch, SsbConfirm, SsbPatch,
         LinkStatus, WriteProgress, PowerOff, EmptyBattery, Mailbox,
-        Group(1), Sub(4, 2), Value(Item::Power), FinishUpdate, Satellites, AutoReply,
+        Group(1), Sub(4, 2), Value(Item::Power), FinishUpdate, Satellites, AutoReply, Snake, Activation,
     ]
 };
 
 /// MENU 0 paths that open a screen or a third-level list (manual Appendix A). Every other path
 /// is a plain value, edited in its group's list.
-pub const MENU0: [(&[u8], Dest); 54] = [
+pub const MENU0: [(&[u8], Dest); 56] = [
     (&[1, 6], Dest::Sub(1, 6)),
     (&[1, 4], Dest::RangePresets),
     (&[1, 5], Dest::SkipList),
@@ -333,6 +337,8 @@ pub const MENU0: [(&[u8], Dest); 54] = [
     (&[3, 4], Dest::Crossband),
     (&[3, 5], Dest::ToneSearch),
     (&[3, 6], Dest::Satellites), // SAT-1
+    (&[3, 7], Dest::Snake),
+    (&[3, 8], Dest::Activation),
     (&[4, 1], Dest::EventLog),
     (&[4, 2], Dest::Sub(4, 2)),
     (&[4, 5], Dest::Sub(4, 5)),
@@ -412,6 +418,8 @@ pub fn enter(dest: Dest, app: &mut App) -> Screen {
         Dest::BandScope => scope::open(app),
         Dest::ToneSearch => probe::open_tone(app),
         Dest::Counter => probe::open_counter(app),
+        Dest::Activation => Screen::Activation(super::activation::Activation),
+        Dest::Snake => super::snake::open(app),
         Dest::Crossband => Screen::Crossband(xb::Crossband { cell: 0 }),
         Dest::Squelch => Screen::Squelch(squelch::Squelch { floor: 0 }),
         // Group C: lists and data

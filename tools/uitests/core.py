@@ -9,7 +9,7 @@ A test is a function taking the context `t`, tagged with the manual rule IDs it 
         t.home()
         u = t.keys("MENU")              # keys, then the screen read back (a U)
         t.eq(u.id, "Quick", "MENU on home opens quick settings")
-        t.check(len(u.rows) == 10, "nine rows and More", u.rows)
+        t.check(len(u.rows) == 11, "nine numbered rows, RF gain and More", u.rows)
 
 `where="radio"` marks a test the simulator can't model: a simulator run doesn't collect it at all (nor one whose
 needs= has a CAPS entry the simulator never has: a bench build, the cable log, a flash), so radio-only tests never

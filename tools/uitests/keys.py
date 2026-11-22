@@ -173,10 +173,9 @@ def shortcut_list_runs_a_row(t):
     t.eq(t.slot("A"), p0, "slot unchanged")
 
 
-@test("KEY-22", "NAV-3", pages=("Counter", "Home"))
+@test("KEY-22", "NAV-3", "MENU-35", pages=("Counter", "Home"))
 def side2_counter_and_big_steps(t):
-    """SIDE2 held alone opens the frequency counter; held with the knob it's big steps (1 MHz) and never the
-    counter."""
+    """SIDE2 alone opens the counter. The knob sets RF gain and the arrows make big steps."""
     u = t.press("SIDE2", long=True)
     t.eq(u.id, "Counter", "hold SIDE2 alone")
     t.home()
@@ -188,12 +187,15 @@ def side2_counter_and_big_steps(t):
     t.r.up("SIDE2")
     u = t.ui(0.2)
     t.eq(u.id, "Home", "SIDE2 + knob: no counter")
-    t.check(abs(float(u.active["freq"]) - f0 - 1.0) < 1e-6, "SIDE2 + knob: 1 MHz", u.active["freq"])
+    t.eq(float(u.active["freq"]), f0, "SIDE2 + knob keeps the frequency")
     t.r.down("SIDE2")
     time.sleep(0.15)
-    t.r.knob(-1)
+    t.r.knob(-4)
+    u = t.press("UP")
+    t.check(abs(float(u.active["freq"]) - f0 - 1.0) < 1e-6, "SIDE2 + UP: 1 MHz", u.active["freq"])
+    t.press("DOWN")
     t.r.up("SIDE2")
-    t.check(abs(float(t.ui(0.2).active["freq"]) - f0) < 1e-6, "and back", t.ui(0).active["freq"])
+    t.eq(float(t.ui(0.2).active["freq"]), f0, "SIDE2 + DOWN: back to the original frequency")
 
 
 @test("LINK-19", "KEY-3", "KEY-6", smoke=True, pages=("More", "Entry", "Home", "Quick"))

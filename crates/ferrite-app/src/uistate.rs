@@ -610,7 +610,12 @@ fn body<S: ChannelStore>(app: &App, cx: &Cx<S>, d: &mut Desc) {
             }
             for (i, item) in QUICK.into_iter().enumerate() {
                 let v = quick::row_value(app, item);
-                row(d, ((i + 1) % 10) as u8, item.name().as_bytes(), v.as_bytes(), i as u8 == qk.row, !app.is_default(item), app.greyed(item).is_some());
+                if i as u8 == quick::RF_GAIN_ROW {
+                    row(d, 10, b"RF gain", app.rf_gain_text(), qk.row == quick::RF_GAIN_ROW, app.rf_gain != Some(0), false);
+                    row(d, 0, item.name().as_bytes(), v.as_bytes(), qk.row == quick::MORE_ROW, false, false);
+                } else {
+                    row(d, i as u8 + 1, item.name().as_bytes(), v.as_bytes(), i as u8 == qk.row, !app.is_default(item), app.greyed(item).is_some());
+                }
             }
         }
         Screen::Advanced(a) => {
@@ -1368,6 +1373,8 @@ pub fn id(s: Screen) -> &'static str {
         Screen::Edit(_) => "Edit",
         Screen::QGrid(_) => "AprsQuick",
         Screen::Quick(_) => "Quick",
+        Screen::Snake(_) => "Snake",
+        Screen::Activation(_) => "Activation",
         Screen::Advanced(_) => "More",
         Screen::Status(_) => "Status",
         Screen::Entry(_) => "Entry",

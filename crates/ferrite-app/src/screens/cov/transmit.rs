@@ -372,3 +372,32 @@ fn automatic_transmissions_checks() {
     assert!(!tx::data_key(&mut t.app, crate::aprs::APRS_SLOT, 0, b"Beacon"));
     assert!(t.cmds().is_empty());
 }
+
+
+/// TX-12.3: the live input and gain setting each redraw their own row.
+#[test]
+fn mic_meter_shows_voice_and_gain_separately() {
+    use ferrite_ui::{gfx::{GREEN, LINE, VIOLET}, theme::map};
+
+    let mut t = T::ready();
+    t.app.screen = Screen::Transmit(Transmit { slot: 0, dial: false });
+    t.live.tx = TxLive { keyed: true, slot: 0, mic: 50, ..TxLive::default() };
+    t.app.set.mic_gain = 5;
+    t.draw();
+    let (y, _) = tx::place(0, 0);
+    let first = 59;
+    let sixth = first + 5 * 9;
+    assert_eq!(t.fb.at(first, y + 115), map(GREEN));
+    assert_eq!(t.fb.at(first, y + 123), map(VIOLET));
+    assert_eq!(t.fb.at(sixth, y + 123), map(LINE));
+
+    t.app.set.mic_gain = 12;
+    t.draw();
+    assert_eq!(t.fb.at(first, y + 115), map(GREEN));
+    assert_eq!(t.fb.at(sixth, y + 123), map(VIOLET));
+
+    t.live.tx.mic = 0;
+    t.draw();
+    assert_eq!(t.fb.at(first, y + 115), map(LINE));
+    assert_eq!(t.fb.at(sixth, y + 123), map(VIOLET));
+}

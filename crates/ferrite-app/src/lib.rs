@@ -271,7 +271,12 @@ const ALERT_WAIT: u8 = 2;
 
 pub struct App {
     screen: Screen,
+    snake: screens::snake::Game,
+    activation: screens::activation::Session,
+    hf_waterfall: screens::scope::HfWaterfall,
     slots: [Slot; SLOTS],
+    /// None disables the quick adjustment; Some(0) is automatic gain.
+    rf_gain: Option<u8>,
     active: u8,
     /// The slot the PTT being pressed keys ([`App::ptt_target`]).
     pub(crate) ptt_slot: u8,
@@ -472,8 +477,12 @@ impl App {
     pub fn new(set: &'static mut Settings, alert: &'static mut AlertInfo) -> Self {
         let mut app = App {
             screen: Screen::Home,
+            snake: screens::snake::Game::new(),
+            activation: screens::activation::Session::new(),
+            hf_waterfall: screens::scope::HfWaterfall::new(),
             slots: [Slot::new(mhz(146) + 52_000), Slot::new(mhz(443) + 47_500), Slot::new(mhz(118) + 95_000)],
             active: 0,
+            rf_gain: Some(0),
             ptt_slot: 0,
             qmenu: None,
             ptt_block: 0,
@@ -577,6 +586,11 @@ impl App {
 
     pub fn screen(&self) -> Screen {
         self.screen
+    }
+
+    /// The game needs regular UI ticks and redraws only while the snake is moving.
+    pub fn snake_playing(&self) -> bool {
+        matches!(self.screen, Screen::Snake(_)) && self.snake.playing()
     }
 
     /// The page the content area shows, as a hash that changes when a screen turns its page (HF's loading page,
@@ -1736,7 +1750,7 @@ impl App {
         self.out.push(RadioCmd::ScanTx(self.set.scan_tx));
         self.out.push(RadioCmd::ToneLevel(self.set.tone_level));
         self.out.push(RadioCmd::BeepVol(self.set.beep_vol.clamp(1, 3)));
-        self.out.push(RadioCmd::MicGain(self.set.mic_gain.clamp(1, 9)));
+        self.out.push(RadioCmd::MicGain(self.set.mic_gain.clamp(1, ferrite_core::vox::MIC_GAIN_MAX)));
         self.out.push(RadioCmd::TxTimeout(self.set.tx_timeout_s() as u16));
         self.send_vox();
         self.send_tx_tones();
@@ -2057,6 +2071,32 @@ impl App {
             SQ_GLOBAL.. => slot.cfg.squelch.min(9),
             l => l,
         }
+    }
+
+    pub(crate) fn rf_gain_text(&self) -> &'static [u8] {
+        match self.rf_gain {
+            None => b"Off",
+            Some(gain) => [b"Auto".as_slice(), b"1 / 4", b"2 / 4", b"3 / 4", b"4 / 4"][gain as usize],
+        }
+    }
+
+    pub(crate) fn set_rf_gain(&mut self, gain: Option<u8>) {
+        let before = self.rf_gain.unwrap_or(0);
+        let after = gain.unwrap_or(0);
+        self.rf_gain = gain;
+        if before != after {
+            self.out.push(RadioCmd::RfGain(after));
+        }
+    }
+
+    pub(crate) fn step_rf_gain(&mut self, d: i32, from_home: bool) {
+        if from_home && self.rf_gain.is_none() {
+            return;
+        }
+        let min = if from_home { 0 } else { -1 };
+        let current = self.rf_gain.map_or(-1, i32::from);
+        let next = current.saturating_add(d).clamp(min, 4);
+        self.set_rf_gain(u8::try_from(next).ok());
     }
 
     /// SIDE1 + knob / ▲▼: the live level one step up or down, stopping at 0 and 9 (SQL-3). A channel on Global

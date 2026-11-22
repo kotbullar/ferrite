@@ -17,12 +17,18 @@ pub const MIC_STOCK: u8 = 0x24;
 /// writes the mic gain again.
 pub const MIC_DATA: u8 = 0x34;
 
-/// VOX-15: REG_7D[5:0] (0.5 dB a step) for Mic gain 1-9 (0 8 3): 9 is 0x39, stock's loudest (its setting 2, the
-/// calibration's 0xF210 byte 0: 0x37 on both bench radios) and a step more, 10.5 dB over stock's default 0x24; 2.5 dB
-/// a step down to 0x11 at 1. 5 (the default) is 0x25, half a dB over stock's default. The field's top (0x3F) is
-/// left unused.
+/// Highest user setting for the BK4829 microphone gain (MENU 0 8 3).
+pub const MIC_GAIN_MAX: u8 = 12;
+
+/// VOX-15: REG_7D[5:0] is 0.5 dB per register step. Levels 1–9 keep their
+/// original 2.5 dB spacing. Levels 10–12 add 1 dB each, up to 0x3F.
 pub fn mic_reg(gain: u8) -> u8 {
-    0x39 - (9 - gain.clamp(1, 9)) * 5
+    let gain = gain.clamp(1, MIC_GAIN_MAX);
+    if gain <= 9 {
+        0x39 - (9 - gain) * 5
+    } else {
+        0x39 + (gain - 9) * 2
+    }
 }
 
 /// Stock's hysteresis: speech goes on above the threshold and stays on down to this many counts below it.
@@ -214,7 +220,8 @@ mod tests {
     #[test]
     fn mic_gain_to_reg_7d() {
         assert_eq!((mic_reg(1), mic_reg(5), mic_reg(9)), (0x11, 0x25, 0x39));
-        assert_eq!((mic_reg(0), mic_reg(12)), (0x11, 0x39), "clamped to 1-9");
+        assert_eq!((mic_reg(10), mic_reg(11), mic_reg(12)), (0x3B, 0x3D, 0x3F));
+        assert_eq!((mic_reg(0), mic_reg(u8::MAX)), (0x11, 0x3F), "clamped to 1–12");
         assert!(mic_reg(5).abs_diff(MIC_STOCK) <= 1, "5 within half a dB of stock's default");
         assert!(mic_reg(8) < 0x37 && mic_reg(9) >= 0x37, "9 reaches stock's loudest, its setting 2 (0xF210 byte 0 on the bench radios)");
     }

@@ -184,7 +184,7 @@ fn is_distress(e: &Event) -> bool {
 fn title(e: &Event, b: &mut Buf<24>) {
     b.clear();
     match e.src {
-        Src::Aprs | Src::Ais | Src::Gps => b.push(e.name.as_bytes()),
+        Src::Aprs | Src::Ais | Src::Gps | Src::Sota | Src::Pota => b.push(e.name.as_bytes()),
         Src::Pocsag => {
             let _ = uwrite!(b, "Capcode {}", e.id);
         }
@@ -355,6 +355,10 @@ fn detail(app: &mut App, lcd: &mut impl Panel, e: &Event, cx: &Cx<impl ChannelSt
             add("Unit", ferrite_ui::v!(b, "{}", e.id));
             add("Sent", e.text.as_bytes());
         }
+        Src::Sota | Src::Pota => {
+            add("Callsign", e.name.as_bytes());
+            add("Reference", e.text.as_bytes());
+        }
         Src::Gps => {
             add("Waypoint", e.name.as_bytes());
             add("Arrival", e.text.as_bytes());
@@ -404,6 +408,7 @@ impl Event {
             Src::Dtmf => b"DTMF sequence",
             Src::Selcall => b"Selcall",
             Src::Gps => b"Waypoint arrival",
+            Src::Sota | Src::Pota => b"Activation contact",
         }
     }
 }

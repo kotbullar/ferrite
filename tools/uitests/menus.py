@@ -4,22 +4,29 @@ import re
 from .core import test
 
 QUICK_ROWS = ["Squelch", "TX power", "Mode", "Tones", "Offset", "Step", "Watch", "Channel", "Battery Save",
-              "More"]
+              "RF gain", "More"]
 GROUPS = ["Watch and scan", "Channels", "Tools", "Decoders and alerts", "APRS", "GPS and time",
           "Display, sound, power", "Transmit", "System"]
 CHIP_WORDS = re.compile(r"BK4829|SI4732|BT513|W25Q|AT32|ST7789", re.I)
 
 
-@test("MENU-1", "MENU-12", "KEY-9", smoke=True, pages=("More", "Quick"))
+@test("MENU-1", "MENU-12", "MENU-35", "KEY-9", smoke=True, pages=("More", "Quick"))
 def quick_settings_rows(t):
-    """MENU on home: quick settings, nine fixed rows for the active slot then 0 More; numbers 1-9, 0."""
+    """MENU on home opens the numbered rows, the PF2 RF gain row and More."""
     u = t.keys("MENU")
     t.eq(u.id, "Quick", "MENU on home opens")
     t.eq(u.names(), QUICK_ROWS, "the rows, in order")
-    t.eq([r["num"] for r in u.rows], [1, 2, 3, 4, 5, 6, 7, 8, 9, 0], "the row numbers")
+    t.eq([r["num"] for r in u.rows], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 0], "the readback row numbers")
     t.check(all(r["value"] for r in u.rows), "every row shows a value", u.rows)
     t.eq(u.sel and u.sel["name"], "Squelch", "the first row selected")
     t.check(len(u.hints) <= 3, "at most three hint pairs", u.hints)
+    u = t.press("SIDE2")
+    t.eq(u.sel and u.sel["name"], "RF gain", "PF2 selects RF gain")
+    t.press("HASH")
+    u = t.knob(1)
+    t.eq(u.sel and u.sel["value"], "1 / 4", "one knob step")
+    u = t.press("HASH")
+    t.eq(u.sel and u.sel["value"], "Auto", "# resets RF gain")
     u = t.keys("0")
     t.eq(u.id, "More", "0 in quick settings opens")
 

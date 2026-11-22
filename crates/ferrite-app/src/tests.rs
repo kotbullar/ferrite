@@ -164,9 +164,9 @@ fn ram_is_small() {
     // to 2056; the Nearby view's rows found once, not per draw (CHAN-15, Nov 17, 2026: 32 channel numbers, their
     // count and what they were found for), 72, to 2128; the channel browser's counts kept between redraws (its view's,
     // 8, and the picker's band views', 16: a full radio counted 4000 records a redraw), 24, to 2152;
-    // the status bar as last drawn gains VOX's mark (SBAR-25: 1 byte), 8 with padding, to 2160; the Radio task's
-    // refusal count seen and as at the key-up (TX-50: 2 bytes, an old refusal no longer ends a key-up), 8, to 2168
-    assert!(n <= 2168, "App is {n} bytes");
+    // The status bar's VOX mark and TX refusal tracking raise the base budget to 2168 bytes.
+    // Snake's board, activation reference, and HF waterfall history and peak hold use another 896 bytes.
+    assert!(n <= 3064, "App is {n} bytes");
     let s = core::mem::size_of::<crate::settings::Settings>();
     std::println!("Settings: {s} bytes");
     assert!(s <= 512, "Settings is {s} bytes");
@@ -181,10 +181,10 @@ fn vfo_steps_and_bands() {
     assert!(t.cmds().contains(&RadioCmd::TuneSlot { slot: 0, freq: f0 + 1_250 }));
     t.knob(-2);
     assert_eq!(t.freq(), f0 - 1_250);
-    // NAV-3: SIDE2 held, 1 MHz
+    // NAV-3: SIDE2 + Up, 1 MHz
     let s = store();
     t.app.key_down(Key::Side(2), t.t, &s);
-    t.knob(1);
+    t.tap(Key::Up);
     t.app.key_up(Key::Side(2), t.t + 100, &s);
     assert_eq!(t.freq(), f0 - 1_250 + 100_000);
     assert!(!t.cmds().iter().any(|c| matches!(c, RadioCmd::Scan { .. })), "SIDE2 as a modifier doesn't scan");
@@ -283,7 +283,7 @@ fn quick_settings() {
     t.tap(Key::Hash); // MENU-18: default
     assert_eq!(t.app.slot(0).cfg().squelch, 4);
     t.tap(Key::Up); // wraps to "0 More"
-    assert_eq!(t.app.screen(), Screen::Quick(Quick { row: 9 }));
+    assert_eq!(t.app.screen(), Screen::Quick(Quick { row: crate::screens::quick::MORE_ROW }));
     t.tap(Key::Digit(7)); // MENU-5: digits pick
     assert_eq!(t.app.screen(), Screen::Quick(Quick { row: 6 }));
     t.knob(1);
@@ -688,7 +688,7 @@ fn every_destination_draws() {
         }
     }
     let ids: std::collections::BTreeSet<_> = ALL.iter().map(|d| d.info().2).collect();
-    assert_eq!(ids.len(), 65, "one inventory ID per destination (B11 FM broadcast: decision 352; groups and lists share D3; B16 weather radio removed: decision 63; C7 sensor reader: decision 75; D18-D20 approvals: decision 104; C5a contacts: decision 226; C3a sent beacons: APRS-53; C19 FM presets: decision 258; D25 finish the update: decision 333; B22 satellites: chapter 28a; A16b auto reply: APRS-57)");
+    assert_eq!(ids.len(), 67, "one inventory ID per destination (B11 FM broadcast: decision 352; groups and lists share D3; B16 weather radio removed: decision 63; C7 sensor reader: decision 75; D18-D20 approvals: decision 104; C5a contacts: decision 226; C3a sent beacons: APRS-53; C19 FM presets: decision 258; D25 finish the update: decision 333; B22 satellites: chapter 28a; A16b auto reply: APRS-57; D26 Snake: SNAKE-1)");
 }
 
 mod group_a;

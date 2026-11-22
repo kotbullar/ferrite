@@ -167,5 +167,10 @@ fn keys_on_screens_50_59() {
 }
 #[test]
 fn keys_on_screens_60_69() {
-    check(60, 70.max(jump_names().count()));
+    check(60, 70);
+}
+
+#[test]
+fn keys_on_screens_70_onward() {
+    check(70, jump_names().count());
 }

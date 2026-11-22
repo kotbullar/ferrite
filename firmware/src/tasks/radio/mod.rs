@@ -209,6 +209,9 @@ struct Radio {
     /// each chip was last given (REG_78, REG_4F), so a retune writes them only when they change.
     sqcal: ferrite_core::sqcal::SqCal,
     sq_regs: [Option<(u16, u16)>; 2],
+    rf_gain: u8,
+    /// Chips that still need the latest gain setting when next receiving.
+    rf_gain_pending: u8,
     /// SQL-18: each chip's software squelch, and the (slot, frequency) it is for (a retune starts it closed).
     soft_sq: [ferrite_core::softsq::SoftSq; 2],
     /// SQL-19: the APRS slot's squelch over the chip's, per chip.
@@ -333,7 +336,7 @@ struct Radio {
     scope: Option<ScopeRun>,
     /// SCOPE-14: the sweep waits after a key or knob step, so the UI handles it first.
     sweep_hold: SweepHold,
-    scope_cfg: (u8, u8, bool),
+    scope_cfg: (u8, u8, bool, bool),
     /// SAME weather alerts (WX-4, DEC-19): on from the UI, and the BK4829 receiver's state.
     same_on: bool,
     /// DEC-6: the DTMF detector wanted, what each chip was armed for, and each slot's digits.
@@ -394,6 +397,7 @@ const SI_VOLUME: u8 = 56;
 /// 0x08023808 / 0x080235E8): the frequency (REG_38/39), REG_30 0x0200 then 0xBFF1 (the VCO recalibration), the
 /// dwell, then REG_67. Stock dwells about 10 ms a point (its 10 ms tick); the dwell is 0 3 1 3's.
 struct ScopeRun {
+    hf: bool,
     chip: u8,
     centre: Freq10,
     step: Freq10,
@@ -513,7 +517,7 @@ struct Tx {
     dialled: bool,
     /// DTMF-1: the sequence being dialled ([`Radio::dial_step`]).
     dial: Option<Dial>,
-    /// Mic gain 1-9 (0 8 3, VOX-15): REG_7D at each voice key-up.
+    /// Mic gain 1–12 (0 8 3, VOX-15): REG_7D at each voice key-up.
     mic: u8,
     /// TX-30: 0 8 1's timeout (s); the sequencer's backstop is [`TX_BACKSTOP_S`] after it.
     timeout_s: u16,
@@ -792,6 +796,8 @@ pub async fn task() {
         bat_at: None,
         sqcal: ferrite_core::sqcal::SqCal::DEFAULT,
         sq_regs: [None; 2],
+        rf_gain: 0,
+        rf_gain_pending: 0,
         soft_sq: [ferrite_core::softsq::SoftSq::DEFAULT; 2],
         aprs_sq: [ferrite_core::aprssq::AprsSq::NEW; 2],
         aprs_open_sent: false,
@@ -851,7 +857,7 @@ pub async fn task() {
         tsearch: None,
         scope: None,
         sweep_hold: SweepHold::new(),
-        scope_cfg: (60, 100, false),
+        scope_cfg: (60, 100, false, false),
         same_on: false,
         dtmf_on: false,
         dtmf_key: [None; 2],

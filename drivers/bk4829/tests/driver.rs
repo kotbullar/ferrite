@@ -53,6 +53,18 @@ fn init_is_stocks() {
 }
 
 #[test]
+fn rx_gain_preserves_other_register_bits() {
+    let mut bk = Bk4829::new(Regs::new());
+    bk.write(0x7E, 0x3056);
+    for index in 0..4 {
+        bk.rx_gain(Some(index));
+        assert_eq!(bk.read(0x7E), 0x8056 | u16::from(index) << 12);
+    }
+    bk.rx_gain(None);
+    assert_eq!(bk.read(0x7E), 0x3056);
+}
+
+#[test]
 fn tune_and_receive() {
     let mut r = Regs::new();
     let mut bk = Bk4829::new(&mut r);

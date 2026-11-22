@@ -289,6 +289,8 @@ const BUDGET: &[(&str, u64)] = &[
     ("D23 Empty battery", 67000),
     ("D24 Mailbox", 10000),
     ("D25 Finish the update", 10000),
+    ("D26 Snake", 9300),
+    ("D27 SOTA / POTA", 9300),
     ("D3 Settings group #2", 88000),
     ("D3 Settings list #2", 77000), // Nov 10, 2026: the menus' rows 25 px from 22 (14 px text), each row 14 % more
     ("A5 Value editor #2", 70000),

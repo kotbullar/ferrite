@@ -88,6 +88,7 @@ pub struct RadioUi {
     pub t0: u32,
     /// The scope's centre, kept between openings.
     pub centre: Freq10,
+    pub scope_hf: bool,
     pub hits: [Hit; HIT_LIST],
     /// The scan hit count ([`ferrite_core::msg::SlotLive::hits`]) last counted into the list.
     pub hits_seen: u8,
@@ -160,6 +161,7 @@ impl RadioUi {
             mode: Mode::Off,
             t0: 0,
             centre: 0,
+            scope_hf: false,
             hits: [Hit { what: 0, at_s: 0, from_s: 0, dbm: 0, n: 0 }; HIT_LIST],
             hits_seen: 0,
             dtmf_seen: 0,
@@ -325,7 +327,7 @@ impl App {
             self.out.push(RadioCmd::Broadcast(BroadcastCmd::Off));
         }
         if want != self.radio.mode {
-            self.stop_mode();
+            self.stop_mode(want);
             self.radio.mode = want;
             self.start_cmds(want);
             self.radio.lease_at = self.now;
@@ -388,15 +390,20 @@ impl App {
     }
 
     /// The running mode's stop (MODE-2; only [`App::reconcile_mode`] calls it).
-    fn stop_mode(&mut self) {
+    fn stop_mode(&mut self, next: Mode) {
         let a = self.active;
         match core::mem::replace(&mut self.radio.mode, Mode::Off) {
             Mode::Off => {}
-            Mode::Scope | Mode::Strip => self.out.push(RadioCmd::Sweep { centre: 0, step: 0, on: false }),
+            Mode::Scope | Mode::Strip => {
+                self.out.push(RadioCmd::Sweep { centre: 0, step: 0, on: false });
+                if core::mem::take(&mut self.radio.scope_hf) && next != Mode::Hf {
+                    self.out.push(RadioCmd::Active(a));
+                }
+            }
             Mode::Tone => self.out.push(RadioCmd::ToneSearch { slot: a, on: false }),
             Mode::Counter => self.out.push(RadioCmd::Counter(false)),
             Mode::Fm => {} // the broadcast's stop is the reconciler's (MODE-5)
-            Mode::Hf => self.out.push(RadioCmd::Hf { freq: self.set.hf.freq, mode: self.set.hf.mode, on: false }),
+            Mode::Hf => self.out.push(RadioCmd::Hf { freq: self.set.hf.freq, mode: self.set.hf.mode, on: false, keep_rx: next == Mode::Scope && super::scope::from_hf(self) }),
             Mode::Sat => self.out.push(RadioCmd::SatRx(0)),
             Mode::Xb => {
                 self.out.push(RadioCmd::Crossband(None));

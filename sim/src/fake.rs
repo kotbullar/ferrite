@@ -429,7 +429,7 @@ impl FakeRadio {
                     self.set(Fake::Off);
                 }
             }
-            RadioCmd::Hf { freq, mode, on } => {
+            RadioCmd::Hf { freq, mode, on, .. } => {
                 let t0 = match self.mode {
                     Fake::Hf { t0, .. } => t0,
                     _ => self.now,

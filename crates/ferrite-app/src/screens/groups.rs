@@ -90,13 +90,15 @@ const G2: [Entry; 6] = [
     Entry(concat!("Local zone|50 km|", txtc!("A zone of the channels within this range of you, nearest first. Needs a GPS fix or the fixed position (0 6 9)."))),
     Entry(concat!("FM broadcast||", txtc!("Step, AGC, radio monitor, sleep timer."))),
 ];
-const G3: [Entry; 6] = [
+const G3: [Entry; 8] = [
     Entry(concat!("Band scope|60 bars|", txtc!("Bars, step, speed, trigger, waterfall."))),
     Entry(concat!("Frequency counter||", txtc!("Find a nearby transmitter's frequency."))),
     Entry(concat!("HF mode||", txtc!("Below 64 MHz. Everything else pauses."))),
     Entry(concat!("Crossband repeater||", txtc!("Repeat one slot's band on another's."))),
     Entry(concat!("Tone search||", txtc!("Find the CTCSS or DCS in use."))),
     Entry(concat!("Satellites||", txtc!("Passes, pointing and Doppler for FM satellites."))),
+    Entry(concat!("Snake||", txtc!("Steer the snake and collect food."))),
+    Entry(concat!("SOTA / POTA||", txtc!("Log contacts for an activation."))),
 ];
 const G4: [Entry; 5] = [
     Entry(concat!("Event log||", txtc!("Every decode and alert."))),
@@ -142,7 +144,7 @@ const G7: [Entry; 9] = [
 const G8: [Entry; 8] = [
     Entry(concat!("Timeout|120 s|", txtc!("Transmit stops after this; a beep says so."))),
     Entry(concat!("VOX|Off|", txtc!("Voice-operated transmit."))),
-    Entry(concat!("Mic gain|5|", txtc!("Higher is louder on air: 1-9. 8-9 for a quiet speaker mic."))),
+    Entry(concat!("Mic gain|5|", txtc!("TX mic gain: 1-12. Levels 10-12 add up to 3 dB above 9."))),
     Entry(concat!("End tone|Off|", txtc!("A short tone as you let go of PTT."))),
     Entry(concat!("DTMF|100 ms|", txtc!("Dialer, memories, timing."))),
     Entry(concat!("Callsign and ID|Empty|", txtc!("Your callsign, and CW ID."))),
@@ -566,7 +568,7 @@ static SETTINGS: [Setting; 98 + cfg!(feature = "bench") as usize] = [
     field!([8, 2, 1], vox: bool, Kind::Flip(&ON_OFF), Vox),
     field!([8, 2, 2], vox_level: u8, Kind::Level(1, 9, 1, vox_level_text), Vox),
     field!([8, 2, 3], vox_tail: u8, Kind::Round(VOX_TAILS.len() as u8, vox_tail_text), Vox),
-    field!([8, 3, 0], mic_gain: u8, Kind::Level(1, 9, 1, vox_level_text), MicGain),
+    field!([8, 3, 0], mic_gain: u8, Kind::Level(1, ferrite_core::vox::MIC_GAIN_MAX, 1, mic_gain_text), MicGain),
     field!([8, 4, 0], end_tone: u8, Kind::Pick(&END_TONE_NAMES), SlotTones),
     // 50-200 ms in 10 ms steps (DTMF-3)
     field!([8, 5, 3], dtmf_ms: u8, Kind::Level(50, 200, 10, dtmf_ms_text), TxTones),
@@ -620,7 +622,7 @@ fn tell(app: &mut App, t: Tell) {
         Tell::ScanTx => app.out.push(RadioCmd::ScanTx(app.set.scan_tx)),
         Tell::BeepVol => app.out.push(RadioCmd::BeepVol(app.set.beep_vol)),
         Tell::Vox => app.send_vox(),
-        Tell::MicGain => app.out.push(RadioCmd::MicGain(app.set.mic_gain.clamp(1, 9))),
+        Tell::MicGain => app.out.push(RadioCmd::MicGain(app.set.mic_gain.clamp(1, ferrite_core::vox::MIC_GAIN_MAX))),
         Tell::TxTimeout => app.out.push(RadioCmd::TxTimeout(app.set.tx_timeout_s() as u16)),
         Tell::TxTones => app.send_tx_tones(),
         Tell::SlotTones => app.send_slot_tones(),
@@ -695,6 +697,10 @@ fn vox_tail_text(v: u8, b: &mut Buf<24>) {
 
 fn beep_vol_text(v: u8, b: &mut Buf<24>) {
     b.set(BEEP_VOLS[(v.clamp(1, 3) - 1) as usize % BEEP_VOLS.len()].as_bytes());
+}
+
+fn mic_gain_text(v: u8, b: &mut Buf<24>) {
+    let _ = uwrite!(b, "{}", v.clamp(1, ferrite_core::vox::MIC_GAIN_MAX));
 }
 
 fn vox_level_text(v: u8, b: &mut Buf<24>) {

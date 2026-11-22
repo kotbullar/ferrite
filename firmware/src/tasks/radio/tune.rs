@@ -113,6 +113,14 @@ impl Radio {
         Some(left)
     }
 
+    pub(super) fn apply_rf_gain(&mut self, n: u8) {
+        if self.rf_gain_pending & (1 << n) != 0 {
+            let fixed = self.rf_gain.checked_sub(1);
+            self.chip(n).rx_gain(fixed);
+            self.rf_gain_pending &= !(1 << n);
+        }
+    }
+
     /// [`Radio::tune_chip`] after the settle wait: REG_37's supplies off for a chip going to sleep; for one tuned,
     /// the receive set-up and receive on, then its squelch thresholds.
     #[inline(never)]
@@ -123,6 +131,7 @@ impl Radio {
             }
             return;
         };
+        self.apply_rf_gain(n);
         let slot = match s {
             s if s < SLOTS as u8 => self.slots[s as usize],
             SCOPE_SLOT => {

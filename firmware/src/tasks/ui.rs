@@ -1186,11 +1186,11 @@ pub async fn task() {
         let frame_min = FRAME_MIN_MS;
         // PWR-24.5: Low Power Mode redraws live changes once a second (keys and the knob still at once).
         let keys_wait = frame_min != FRAME_MIN_MS; // only the bench's cap holds keys back too (TERM-40)
-        let frame_min = if app.low_power() { frame_min.max(LPM_FRAME_MS) } else { frame_min };
+        let frame_min = if app.low_power() && !app.snake_playing() { frame_min.max(LPM_FRAME_MS) } else { frame_min };
         // PWR-26.10: at rest (24 MHz) live changes alone redraw at most every IDLE_FRAME_MS: a level jittering by a
         // dB woke a whole-screen check 5-6 times a second, 25 ms each with nothing to send (14 % of the CPU, black,
         // Nov 4, 2026); keys and the knob raise the clock and draw at once
-        let frame_min = if crate::hal::clock::is_low() { frame_min.max(IDLE_FRAME_MS) } else { frame_min };
+        let frame_min = if crate::hal::clock::is_low() && !app.snake_playing() { frame_min.max(IDLE_FRAME_MS) } else { frame_min };
         let asleep = panel_asleep;
         let draw = !asleep && (urgent && !keys_wait || since >= frame_min);
         let (c0, b0, i0) = (crate::hal::time::cycles(), crate::bus::LCD_BYTES.load(Relaxed), crate::IRQ_CYCLES.load(Relaxed));
@@ -1262,6 +1262,9 @@ pub async fn task() {
         LED_RED.write(leds.red == LED_ACTIVE_HIGH);
         LED_GREEN.write(leds.green == LED_ACTIVE_HIGH);
         let mut period = if down != 0 || ports.busy() { TICK_HELD_MS } else if asleep { TICK_DARK_MS } else { TICK_IDLE_MS };
+        if !asleep && app.snake_playing() {
+            period = period.min(TICK_HELD_MS);
+        }
         if !draw && !asleep {
             period = period.min(frame_min.saturating_sub(since).max(1) as u64); // the frame held back, drawn on time
         }

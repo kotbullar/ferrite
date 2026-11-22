@@ -34,14 +34,16 @@ pub enum Src {
     Selcall,
     /// Arriving at a waypoint (GPS-12): the waypoint's name, and "Arrived, N m" as the text.
     Gps,
+    Sota,
+    Pota,
 }
 
 impl Src {
     /// In the order the log stores them (a record's source byte): new sources go at the end.
-    pub const ALL: [Src; 8] = [Src::Aprs, Src::Pocsag, Src::Same, Src::Dsc, Src::Ais, Src::Dtmf, Src::Selcall, Src::Gps];
+    pub const ALL: [Src; 10] = [Src::Aprs, Src::Pocsag, Src::Same, Src::Dsc, Src::Ais, Src::Dtmf, Src::Selcall, Src::Gps, Src::Sota, Src::Pota];
 
     pub fn name(self) -> &'static str {
-        ["APRS", "Pager", "SAME", "DSC", "AIS", "DTMF", "Selcall", "GPS"][self as usize]
+        ["APRS", "Pager", "SAME", "DSC", "AIS", "DTMF", "Selcall", "GPS", "SOTA", "POTA"][self as usize]
     }
 }
 
@@ -478,6 +480,10 @@ pub trait Data {
     }
 
     /// The event log, newest first.
+    fn append_activation(&self, _event: &Event) -> bool {
+        false
+    }
+
     fn events(&self) -> u16 {
         0
     }
