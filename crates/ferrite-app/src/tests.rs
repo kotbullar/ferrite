@@ -166,9 +166,9 @@ fn ram_is_small() {
     // 8, and the picker's band views', 16: a full radio counted 4000 records a redraw), 24, to 2152;
     // the status bar as last drawn gains VOX's mark (SBAR-25: 1 byte), 8 with padding, to 2160;
     // Snake's board, occupied rows, movement clock and state (SNAKE-2), 256 with padding, to 2416.
-    // HF waterfall history adds up to 376 bytes with padding.
+    // HF waterfall history and the current activation reference add up to 392 bytes with padding.
     // Peak hold adds one byte per scope bin, plus alignment for the toggle.
-    assert!(n <= 3040, "App is {n} bytes");
+    assert!(n <= 3056, "App is {n} bytes");
     let s = core::mem::size_of::<crate::settings::Settings>();
     std::println!("Settings: {s} bytes");
     assert!(s <= 512, "Settings is {s} bytes");
@@ -690,7 +690,7 @@ fn every_destination_draws() {
         }
     }
     let ids: std::collections::BTreeSet<_> = ALL.iter().map(|d| d.info().2).collect();
-    assert_eq!(ids.len(), 66, "one inventory ID per destination (B11 FM broadcast: decision 352; groups and lists share D3; B16 weather radio removed: decision 63; C7 sensor reader: decision 75; D18-D20 approvals: decision 104; C5a contacts: decision 226; C3a sent beacons: APRS-53; C19 FM presets: decision 258; D25 finish the update: decision 333; B22 satellites: chapter 28a; A16b auto reply: APRS-57; D26 Snake: SNAKE-1)");
+    assert_eq!(ids.len(), 67, "one inventory ID per destination (B11 FM broadcast: decision 352; groups and lists share D3; B16 weather radio removed: decision 63; C7 sensor reader: decision 75; D18-D20 approvals: decision 104; C5a contacts: decision 226; C3a sent beacons: APRS-53; C19 FM presets: decision 258; D25 finish the update: decision 333; B22 satellites: chapter 28a; A16b auto reply: APRS-57; D26 Snake: SNAKE-1)");
 }
 
 mod group_a;

@@ -52,6 +52,8 @@ pub enum TextFor {
     ContactName,
     /// 0 5 9 9: who auto reply answers (APRS-57.1): capitals, digits and `-`, * typing the wildcard.
     ReplyTo,
+    ActivationRef,
+    ActivationCall,
 }
 
 /// What a text takes: any text, a channel name (the name set, CHAN-31), capitals and digits (a callsign, a grid
@@ -83,6 +85,8 @@ impl TextFor {
             TextFor::ContactCall => "Contact callsign",
             TextFor::ContactName => "Contact name",
             TextFor::ReplyTo => "Reply to",
+            TextFor::ActivationRef => "Activation reference",
+            TextFor::ActivationCall => "Contact callsign",
         }
     }
 
@@ -120,6 +124,8 @@ impl TextFor {
                 b
             }
             TextFor::AprsPath => Buf::from(app.aprs_custom_path()),
+            TextFor::ActivationRef => Buf::from(app.activation.reference.as_bytes()),
+            TextFor::ActivationCall => Buf::new(),
             TextFor::ReplyTo => Buf::from(app.aprs_cfg().reply_to_text()),
             TextFor::ContactCall => Buf::from(app.contact_call.as_bytes()),
             TextFor::ContactName => store.data().contact_of(app.contact_call.as_bytes()).map_or(Buf::new(), |c| Buf::from(c.name.as_bytes())),
@@ -128,7 +134,7 @@ impl TextFor {
 
     fn kind(self) -> Kind {
         match self {
-            TextFor::Callsign | TextFor::GridFixed | TextFor::GridWaypoint | TextFor::ContactCall => Kind::Caps,
+            TextFor::Callsign | TextFor::GridFixed | TextFor::GridWaypoint | TextFor::ContactCall | TextFor::ActivationRef | TextFor::ActivationCall => Kind::Caps,
             TextFor::Capcode | TextFor::Clock => Kind::Digits,
             TextFor::AprsPath => Kind::Path,
             TextFor::ReplyTo => Kind::Pattern,
@@ -183,7 +189,7 @@ impl Text {
         match (self.to, self.to.kind(), self.mode) {
             (_, Kind::Name, 3) => 4,
             // the capitals of a callsign, grid square or path: their own key 1 (APRS-37, SETUP-12)
-            (TextFor::Callsign, _, 0) => 6,
+            (TextFor::Callsign | TextFor::ActivationRef | TextFor::ActivationCall, _, 0) => 6,
             (TextFor::GridFixed | TextFor::GridWaypoint, _, 0) => 7,
             (_, Kind::Caps | Kind::Path | Kind::Pattern, 0) => 5,
             (_, _, m) => m,
@@ -346,6 +352,8 @@ impl View for Text {
                 txt!("Year, month, day, hour, minute: 202610081430. Local time.")
             } else if self.to == TextFor::Capcode {
                 txt!("The capcode's digits. Empty keeps every capcode.")
+            } else if self.to == TextFor::ActivationRef {
+                txt!("Enter a summit like I/LO-001 or a park like IT-0001.")
             } else if self.to == TextFor::ReplyTo {
                 txt!("* alone: everyone. VE7*: every call starting VE7. Else one callsign-SSID.")
             } else if self.to == TextFor::AprsPath {
@@ -372,6 +380,7 @@ impl View for Text {
 fn keep(to: TextFor, app: &mut App, store: &impl ChannelStore) {
     let t = app.text;
     match to {
+        TextFor::ActivationRef | TextFor::ActivationCall => return super::activation::keep(app, to, t.as_bytes(), store),
         TextFor::ContactCall | TextFor::ContactName => return super::contacts::typed(app, to, t.as_bytes(), store),
         TextFor::ChannelName => super::chedit::edit(app, |c| c.set_name(t.as_bytes())),
         TextFor::Channel(n) => {

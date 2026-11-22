@@ -2240,6 +2240,10 @@ impl<N: Nor, D: Data> Data for FlashStore<N, D> {
     fn version(&self) -> u32 {
         self.ver.get().wrapping_add(self.extra.version())
     }
+    fn append_activation(&self, event: &Event) -> bool {
+        self.log(event)
+    }
+
     fn events(&self) -> u16 {
         self.events.len()
     }

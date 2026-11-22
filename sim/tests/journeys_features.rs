@@ -500,3 +500,31 @@ fn hf_waterfall_tunes_the_marker_without_changing_home() {
     assert_eq!(r.sim.app().slot(0).freq(), home);
     assert!(r.take_cmds().iter().any(|c| matches!(c, RadioCmd::Hf { freq, on: true, .. } if *freq == picked)));
 }
+
+/// An activation QSO is filed in the persistent log read by Console.
+#[test]
+fn activation_contact_survives_restart() {
+    use ferrite_app::data::{Data, Src};
+    use ferrite_sim::simcore::Stored;
+
+    for (source, keys, reference) in [
+        (Src::Pota, "44481#0001", "IT-0001"),
+        (Src::Sota, "444115556661#001", "I/LO-001"),
+    ] {
+        let mut r = Radio::new();
+        r.menu("0 3 8").expect_screen("SOTA / POTA").expect_text("Set reference");
+        r.press(Key::Menu).type_(keys).press(Key::Menu);
+        r.expect_screen("SOTA / POTA").expect_text(reference);
+        r.press(Key::Digit(2)).type_("2#1#2").press(Key::Menu).expect_screen("SOTA / POTA");
+        r.wait(250);
+        let image = r.sim.flash_image();
+        drop(r);
+
+        let r = Radio::with(Stored::Image(image));
+        let store = r.sim.store();
+        let qso = (0..store.events()).filter_map(|i| store.event(i)).find(|e| e.src == source).expect("activation QSO");
+        assert_eq!(qso.name.as_bytes(), b"A1A");
+        assert_eq!(qso.text.as_bytes(), reference.as_bytes());
+        assert_eq!(qso.freq, mhz(145) + 92_000, "the active slot's TX frequency");
+    }
+}
