@@ -272,6 +272,7 @@ const ALERT_WAIT: u8 = 2;
 pub struct App {
     screen: Screen,
     snake: screens::snake::Game,
+    hf_waterfall: screens::scope::HfWaterfall,
     slots: [Slot; SLOTS],
     /// None disables the quick adjustment; Some(0) is automatic gain.
     rf_gain: Option<u8>,
@@ -473,6 +474,7 @@ impl App {
         let mut app = App {
             screen: Screen::Home,
             snake: screens::snake::Game::new(),
+            hf_waterfall: screens::scope::HfWaterfall::new(),
             slots: [Slot::new(mhz(146) + 52_000), Slot::new(mhz(443) + 47_500), Slot::new(mhz(118) + 95_000)],
             active: 0,
             rf_gain: Some(0),

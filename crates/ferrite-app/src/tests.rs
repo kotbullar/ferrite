@@ -166,7 +166,9 @@ fn ram_is_small() {
     // 8, and the picker's band views', 16: a full radio counted 4000 records a redraw), 24, to 2152;
     // the status bar as last drawn gains VOX's mark (SBAR-25: 1 byte), 8 with padding, to 2160;
     // Snake's board, occupied rows, movement clock and state (SNAKE-2), 256 with padding, to 2416.
-    assert!(n <= 2416, "App is {n} bytes");
+    // HF waterfall history adds up to 376 bytes with padding.
+    // Peak hold adds one byte per scope bin, plus alignment for the toggle.
+    assert!(n <= 3040, "App is {n} bytes");
     let s = core::mem::size_of::<crate::settings::Settings>();
     std::println!("Settings: {s} bytes");
     assert!(s <= 512, "Settings is {s} bytes");

@@ -475,7 +475,7 @@ fn hf_waterfall_tunes_the_marker_without_changing_home() {
     let centre = mhz(27) + 18_500;
     assert_eq!(r.sim.app_mut().settings_mut().hf.freq, centre);
     r.take_cmds();
-    r.press(Key::Menu).wait(500).expect_screen("Scope").expect_text("HF scope");
+    r.press(Key::Menu).wait(500).expect_screen("Scope").expect_text("HF 2D");
     let cmds = r.take_cmds();
     assert!(cmds.iter().any(|c| matches!(c, RadioCmd::Hf { on: false, keep_rx: true, .. })));
     assert!(cmds.iter().any(|c| matches!(c, RadioCmd::ScopeCfg { hf: true, strip: false, .. })));
@@ -483,6 +483,15 @@ fn hf_waterfall_tunes_the_marker_without_changing_home() {
         RadioCmd::Sweep { step, on: true, .. } => Some(*step),
         _ => None,
     }).expect("HF sweep started");
+    r.press(Key::Star).wait(500).expect_screen("Scope").expect_text("HF 3D");
+    let cmds = r.take_cmds();
+    assert!(!cmds.iter().any(|c| matches!(c, RadioCmd::ScopeCfg { .. } | RadioCmd::Sweep { .. } | RadioCmd::ScopeListen { .. })),
+        "changing the view leaves the receiver sweeping: {cmds:?}");
+    r.press(Key::Star).expect_screen("Scope").expect_text("HF 2D");
+    r.hold(Key::Star).expect_text("Peak hold");
+    r.press(Key::Star).expect_text("HF 3D").expect_text("Peak hold");
+    r.hold(Key::Side(2)).expect_text("Peak hold");
+    r.hold(Key::Star).expect_text("CENTER");
     r.press(Key::Right).press(Key::Side(1)).expect_text("Listen");
     let picked = centre + u32::from(step);
     assert!(r.take_cmds().iter().any(|c| matches!(c, RadioCmd::ScopeListen { freq, .. } if *freq == picked)));
