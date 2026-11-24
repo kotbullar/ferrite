@@ -250,6 +250,10 @@ impl Sstv {
         }
         // SSTV-2.5: once # is pressed, the mode it picked (Auto: the VIS picks) and what the next press does
         match app.sstv.forced_vis() {
+            None if app.sstv.iss => {
+                let f = w::freq3(app.tuned_freq(app.active));
+                let _ = ufmt::uwrite!(l3, "ISS {} FM  /  Auto", Bytes(f.as_bytes()));
+            }
             None if !app.sstv.picked() => listening(l3),
             None => l3.set(b"Mode: Auto (# next)"),
             Some(vis) => {
@@ -289,6 +293,8 @@ impl View for Sstv {
         match (e.key, e.press) {
             (Key::Left, Short | Repeat) => Self::step_view(app, st, -1),
             (Key::Right, Short | Repeat) => Self::step_view(app, st, 1),
+            (Key::Digit(1), Short) => app.sstv_iss(st),
+            (Key::Menu, Short) if app.sstv.iss => app.show_toast(b"ISS SSTV", b"Receive only", false),
             (Key::Menu, Short) => {
                 let v = app.sstv.view;
                 if v != VIEW_CARD && header(st, v).is_none_or(|h| h.lines.is_none()) {
@@ -302,6 +308,16 @@ impl View for Sstv {
                 app.back();
             }
             _ => {}
+        }
+    }
+
+    fn ptt(self, app: &mut App, down: bool) {
+        if down {
+            if app.sstv.iss {
+                app.show_toast(b"ISS SSTV", b"Receive only", false);
+            } else {
+                super::nav::transmit(app);
+            }
         }
     }
 
@@ -366,8 +382,10 @@ impl View for Sstv {
             Hints::new(&[("BACK", "Stop")])
         } else if self.send.is_some() {
             Hints::new(&[("Knob", "Mode"), ("OK", "Send"), ("BACK", "Back")])
+        } else if app.sstv.iss {
+            Hints::new(&[(ARROWS_LR, "Picture"), ("#", "Mode"), ("BACK", "Back")])
         } else {
-            Hints::new(&[(ARROWS_LR, "Picture"), ("OK", "Send"), ("#", "Mode")])
+            Hints::new(&[(ARROWS_LR, "Picture"), ("1", "ISS RX"), ("OK", "Send")])
         }
     }
 }

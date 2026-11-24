@@ -392,3 +392,15 @@ fn quick_mute() {
     }
     r.expect_text("Muted");
 }
+
+#[test]
+fn sstv_iss_preset_tunes_and_listens_without_keying() {
+    let mut r = Radio::new();
+    r.menu("0 3 7").expect_screen("SSTV").expect_text("ISS RX");
+    r.press(Key::Digit(1)).expect_text("ISS 145.800 FM").expect_text("Auto");
+    let slot = r.sim.app().slot_state(r.sim.app().active());
+    assert_eq!((slot.freq, slot.mode, slot.offset, slot.rx_tone), (14_580_000, 0, 0, 0));
+    r.press(Key::Menu).expect_text("Receive only");
+    r.press(Key::Ptt(ferrite_core::keys::PTT_A)).expect_screen("SSTV");
+    assert!(!r.sim.radio().live.tx.keyed);
+}

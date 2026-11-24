@@ -4,12 +4,16 @@
 
 use crate::chan::ChannelStore;
 use crate::data::DataWrite;
+use crate::slotctl::{SlotChange, Tune};
 use crate::App;
 use ferrite_core::msg::RadioCmd;
 use ferrite_core::sstv::{self, Event, Header, HEADER_LEN, ROW_LEN, SLOTS, WIDTH};
 
+/// The ISS SSTV FM downlink, in 10 Hz units.
+pub const ISS_DOWNLINK: u32 = 14_580_000;
+
 /// The modes a picture is sent in (SSTV-5.1), their VIS codes in the Send page's order.
-pub const SEND_MODES: [u8; 4] = [8, 44, 60, 99];
+pub const SEND_MODES: [u8; 5] = [8, 44, 60, 99, 95];
 /// The modes # starts by hand (SSTV-2.5), in order, then Auto (the VIS picks).
 pub const FORCE_MODES: [u8; 5] = [8, 44, 60, 99, 95];
 /// [`SstvState::forced`]'s flag: # has been pressed since the screen opened (one bit, not a field: the App's RAM).
@@ -39,6 +43,8 @@ pub struct Tx {
 pub struct SstvState {
     /// The screen is open: the DSP task's slot is SSTV's (SSTV-1).
     pub open: bool,
+    /// The ISS preset keeps the SSTV screen in receive-only mode until closed.
+    pub iss: bool,
     /// For the UI task to pass to the DSP task: a mode started by hand (its VIS), or 0: stop.
     pub force: Option<u8>,
     /// SSTV-2.5: the mode # picked (an index into [`FORCE_MODES`] plus one; 0 Auto), until its picture ends; with
@@ -149,6 +155,7 @@ impl App {
             return;
         }
         self.sstv.open = true;
+        self.sstv.iss = false;
         self.sstv.forced = 0;
         self.sstv.view = VIEW_CARD;
         self.sstv.prep = true;
@@ -161,6 +168,29 @@ impl App {
                 self.scan_mask &= !(1 << s);
             }
         }
+    }
+
+    /// Set up the active VFO for the ISS downlink and re-arm automatic mode detection.
+    pub fn sstv_iss(&mut self, st: &impl ChannelStore) {
+        if self.sstv.rx.is_some() {
+            return self.show_toast(b"SSTV", b"Picture in progress", false);
+        }
+        let slot = self.active;
+        let preset = SlotChange {
+            vfo: true,
+            freq: Some(ISS_DOWNLINK),
+            mode: Some(0), // Wide voice FM.
+            offset: Some((0, false)),
+            rx_tone: Some(0),
+            ..SlotChange::default()
+        };
+        if self.slot_apply(slot, &preset, st).is_err() {
+            return self.show_toast(b"ISS SSTV", b"VFO unavailable", false);
+        }
+        let _ = self.slot_tune(slot, Tune::Quiet(0), st);
+        self.sstv.iss = true;
+        self.sstv.forced = 0;
+        self.sstv.force = Some(0);
     }
 
     /// After [`App::sstv_enter`], with the store (the UI task's next turn): the newest picture received shown, and
@@ -195,6 +225,7 @@ impl App {
             self.sstv_event(Event::End(false), &[0; WIDTH], st);
         }
         self.sstv.open = false;
+        self.sstv.iss = false;
         self.sstv.prep = false;
         self.sstv.rx = None;
         self.sstv_release();
@@ -319,6 +350,9 @@ impl App {
     /// SSTV-5: send the picture shown in mode `vis` on the active slot: refused (a toast) when it's longer than the
     /// transmit timeout (SSTV-5.1). The UI task keys and plays it.
     pub fn sstv_send(&mut self, vis: u8, src: u8) {
+        if self.sstv.iss {
+            return self.show_toast(b"ISS SSTV", b"Receive only", false);
+        }
         let secs = mode_secs(vis);
         let limit = self.set.tx_timeout_s();
         if secs > limit {

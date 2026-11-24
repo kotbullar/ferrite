@@ -322,3 +322,21 @@ fn hash_picks_the_receive_mode() {
     assert_eq!(info(&a, &st)[2], "Mode: Auto (# next)");
     assert!(readback(&a, &st).iter().any(|l| l == "toast \"Picture saved\" \"Robot 36\""), "{:?}", readback(&a, &st));
 }
+
+#[test]
+fn iss_pd120_audio_is_detected_and_saved_in_color() {
+    let st = mount();
+    let mut a = app();
+    a.sstv_open(&st);
+    a.sstv_iss(&st);
+    assert!(a.sstv.iss);
+    let c = decoded(95); // PD120, with the VIS header.
+    for (event, pixels) in c.0.iter().zip(&c.1) {
+        a.sstv_event(*event, pixels, &st);
+    }
+    let h = headers(&st)[sstv::FIRST_RX as usize].expect("ISS picture");
+    assert_eq!((h.vis, h.freq, h.lines, h.complete), (95, 14_580_000, Some(248), true));
+    let (_, pixels) = c.0.iter().zip(&c.1).find(|(event, _)| matches!(event, Event::Line(100, _))).unwrap();
+    let stored = row(&st, sstv::FIRST_RX, 100);
+    assert!(stored.chunks_exact(2).zip(pixels).all(|(raw, &px)| u16::from_le_bytes([raw[0], raw[1]]) == px));
+}
