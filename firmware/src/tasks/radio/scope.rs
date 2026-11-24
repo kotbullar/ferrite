@@ -2,12 +2,24 @@
 
 use super::*;
 
+impl ScopeRun {
+    pub(super) fn uses_si(&self) -> bool {
+        self.si
+    }
+}
+
 impl Radio {
     /// SCOPE-4, SCOPE-13: the scope on (the centre's chip sweeps, the other sleeps, the relay stays) or off (the
     /// engines retune on the next tick).
     pub(super) async fn scope(&mut self, centre: Freq10, step: u16, on: bool) {
         self.tuned = [None; 2];
         self.bcast_audio(now_ms() as u32, false); // the speaker off, or the broadcast's alone (MODE-5)
+        let (n, tenths, strip, hf, si) = self.scope_cfg;
+        let si = hf && si && on;
+        if self.scope.as_ref().is_some_and(ScopeRun::uses_si) && !si {
+            speaker(false);
+            let _ = broadcast(&mut self.si, BroadcastCmd::Off, self.si_opts).await;
+        }
         if !on {
             for n in 0..2u8 {
                 if self.has(n) {
@@ -20,15 +32,17 @@ impl Radio {
             return;
         }
         let chip = Sel::rx(centre).chip();
-        let (n, tenths, strip, hf) = self.scope_cfg;
         if hf {
-            if !(mhz(18)..mhz(64)).contains(&centre) || !self.has(chip) {
+            if !freq::hf_scope_range(si).contains(&centre) || (!si && !self.has(chip)) {
                 self.scope = None;
                 self.live.mode = ModeLive::Off;
                 return;
             }
-            self.select_rx(centre, Cause::HfReceiver).await;
-            if self.path.rx_now() != Rx::Bk(Sel::rx(centre)) {
+            let receiver = if si { Rx::Si } else { Rx::Bk(Sel::rx(centre)) };
+            let mut steps = Steps::default();
+            let _ = self.path.rx(receiver, Cause::HfReceiver, now_ms() as u32, &mut steps);
+            self.run(&steps).await;
+            if self.path.rx_now() != receiver {
                 self.scope = None;
                 self.live.mode = ModeLive::Off;
                 return;
@@ -36,15 +50,17 @@ impl Radio {
         }
         let home = strip.then_some(self.active);
         let n = n.clamp(1, ferrite_core::msg::SCOPE_BARS as u8);
-        let keep = self.scope.as_ref().filter(|sc| sc.centre == centre && sc.step == step as Freq10 && sc.n == n);
+        let keep = self.scope.as_ref().filter(|sc| sc.si == si && sc.centre == centre && sc.step == step as Freq10 && sc.n == n);
         let last = keep.map_or([0; ferrite_core::msg::SCOPE_BARS], |sc| sc.last);
         self.scope = Some(ScopeRun {
             hf,
+            si,
             chip,
             centre,
             step: step as Freq10,
             n,
             dwell_us: tenths.max(1) as u32 * 100,
+            si_tune_at: None,
             i: 0,
             last,
             sweeps: 0,
@@ -56,7 +72,22 @@ impl Radio {
             since: 0,
             closed: 0,
         });
-        self.live.mode = ModeLive::Scope { centre, bars: last, n, sweeps: 0, listen: 0, open: false };
+        self.live.mode = ModeLive::Scope { centre, bars: last, n, sweeps: 0, listen: 0, open: false, si };
+        if si {
+            speaker(false);
+            for n in 0..2 {
+                self.tune_chip(n, None).await;
+            }
+            // Start the AM receiver only once. Subsequent points use asynchronous tune polling.
+            if self.si.mode() != Some(SiMode::Am)
+                && broadcast(&mut self.si, BroadcastCmd::Am((centre / 100) as u16), self.si_opts).await.is_err()
+            {
+                let _ = broadcast(&mut self.si, BroadcastCmd::Off, self.si_opts).await;
+                self.scope = None;
+                self.live.mode = ModeLive::Off;
+            }
+            return;
+        }
         if self.has(1 - chip) {
             self.tune_chip(1 - chip, None).await;
         }
@@ -72,10 +103,24 @@ impl Radio {
     /// SCOPE-11: listen on `freq` with the scope's mode (the path set first); 0 goes back to sweeping.
     pub(super) async fn scope_listen(&mut self, freq: Freq10, mode: u8) {
         let Some(sc) = self.scope.as_mut() else { return };
-        if sc.hf && freq != 0 && !(mhz(18)..mhz(64)).contains(&freq) {
+        if sc.hf && freq != 0 && !freq::hf_scope_range(sc.uses_si()).contains(&freq) {
             return;
         }
+        let si = sc.uses_si();
         (sc.listen, sc.mode) = (freq, mode);
+        if si {
+            speaker(false);
+            if sc.si_tune_at.take().is_some() {
+                let _ = self.si.seek_cancel(&mut BusyDelay);
+            }
+            let open = freq != 0
+                && broadcast(&mut self.si, BroadcastCmd::Am((freq / 100) as u16), self.si_opts).await.is_ok();
+            speaker(open && !self.muted);
+            if let ModeLive::Scope { listen, open: heard, .. } = &mut self.live.mode {
+                (*listen, *heard) = (freq, open);
+            }
+            return;
+        }
         let chip = sc.chip;
         let back = sc.centre;
         self.tuned[chip as usize] = None;
@@ -96,8 +141,11 @@ impl Radio {
         let low = sc.centre as i64 - sc.step as i64 * sc.n as i64 / 2;
         let f = low + sc.step as i64 * i as i64;
         let f = Freq10::try_from(f).ok()?;
-        if sc.hf && !(mhz(18)..mhz(64)).contains(&f) {
+        if sc.hf && !freq::hf_scope_range(sc.uses_si()).contains(&f) {
             return None;
+        }
+        if sc.uses_si() {
+            return Some(f);
         }
         let (here, centre) = (Sel::rx(f), Sel::rx(sc.centre));
         (here.chip() == centre.chip() && here.relay() == centre.relay() && freq::receivable(f)).then_some(f)
@@ -106,6 +154,9 @@ impl Radio {
     /// Tune the scope's chip to its current point: stock's per-point sequence, frequency then the REG_30 retune.
     pub(super) fn scope_point(&mut self) {
         let Some(sc) = self.scope.as_ref() else { return };
+        if sc.uses_si() {
+            return;
+        }
         if let Some(f) = Self::scope_freq(sc, sc.i) {
             let chip = sc.chip;
             let w = self.sqcal.rx_word(f); // CAL-12
@@ -121,6 +172,11 @@ impl Radio {
     #[inline(never)]
     pub(super) fn scope_tick(&mut self, now: u32) {
         let Some(mut sc) = self.scope.take() else { return };
+        if sc.uses_si() {
+            self.scope_si_tick(&mut sc, now);
+            self.scope = Some(sc);
+            return;
+        }
         let chip = sc.chip;
         // SQL-9.4: a latched or held monitor on the strip's slot holds it there, open, as on home without the strip
         // (it was ignored: monitor worked only once a menu stopped the strip). Not while the slot is muted or off.
@@ -221,4 +277,38 @@ impl Radio {
         self.scope = Some(sc);
         self.scope_point();
     }
+    /// Each SI4732 point starts a tune and waits for STC before taking a sample.
+    fn scope_si_tick(&mut self, sc: &mut ScopeRun, now: u32) {
+        if sc.listen != 0 || self.sweep_hold.held(now) {
+            return;
+        }
+        let level = if let Some(f) = Self::scope_freq(sc, sc.i) {
+            let khz = (f / 100) as u16;
+            if let Some(start) = sc.si_tune_at {
+                match self.si.tune_poll(&mut BusyDelay) {
+                    Ok(Some(tune)) if tune.freq == khz => (super::hf::si_rssi_dbm(tune.rssi) + 160).clamp(1, 255) as u8,
+                    Ok(_) if now.wrapping_sub(start) < SI_TUNE_MAX_MS as u32 => return,
+                    _ => 0,
+                }
+            } else if self.si.tune_start(khz, Sideband::Usb, &mut BusyDelay).is_ok() {
+                sc.si_tune_at = Some(now);
+                return;
+            } else {
+                0
+            }
+        } else {
+            0
+        };
+        sc.si_tune_at = None;
+        if let ModeLive::Scope { bars, sweeps, .. } = &mut self.live.mode {
+            bars[sc.i as usize] = level;
+            sc.i += 1;
+            if sc.i >= sc.n {
+                sc.i = 0;
+                sc.sweeps = sc.sweeps.wrapping_add(1);
+                *sweeps = sc.sweeps;
+            }
+        }
+    }
+
 }

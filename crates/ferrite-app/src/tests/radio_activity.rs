@@ -1351,7 +1351,7 @@ fn scope_live(t: &mut T, centre: Freq10, at: usize, peak: u8, sweeps: u8, open: 
         *b = 40;
     }
     bars[at] = 40 + peak;
-    t.live.mode = ferrite_core::msg::ModeLive::Scope { centre, bars, n: 60, sweeps, listen, open };
+    t.live.mode = ferrite_core::msg::ModeLive::Scope { centre, bars, n: 60, sweeps, listen, open, si: false };
     t.wait(100);
 }
 
@@ -1861,7 +1861,7 @@ fn input_first_on_the_scope() {
             *b = 40 + (i * 7 % 60) as u8;
         }
         let n = if m == Mode::Strip { crate::screens::scope::STRIP_BARS } else { crate::screens::scope::bars_n(&t.app) } as u8;
-        t.live.mode = ModeLive::Scope { centre: t.app.radio.centre.max(t.freq()), bars, n, sweeps: 1, listen: 0, open: false };
+        t.live.mode = ModeLive::Scope { centre: t.app.radio.centre.max(t.freq()), bars, n, sweeps: 1, listen: 0, open: false, si: false };
         t.wait(100);
         let mut lcd = Pending(FrameBuffer::new(), Vec::new(), true);
         t.app.render(&mut lcd, &t.live, &dev, &store());

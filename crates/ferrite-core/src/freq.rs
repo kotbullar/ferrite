@@ -2,6 +2,17 @@
 
 pub type Freq10 = u32;
 
+/// Limits of HF Mode and the receiver changeover, in 10 Hz units.
+pub const HF_BOTTOM: Freq10 = 15_000;
+pub const HF_BK_FROM: Freq10 = mhz(18);
+pub const HF_TOP: Freq10 = mhz(64);
+/// The SI4732's AM tuning command supports frequencies through 30 MHz.
+pub const HF_SI_TOP: Freq10 = mhz(30);
+
+pub fn hf_scope_range(si: bool) -> core::ops::RangeInclusive<Freq10> {
+    if si { HF_BOTTOM..=HF_SI_TOP } else { HF_BK_FROM..=HF_TOP - 1 }
+}
+
 pub const fn mhz(x: u32) -> Freq10 {
     x * 100_000
 }

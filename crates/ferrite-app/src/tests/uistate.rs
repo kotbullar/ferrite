@@ -357,7 +357,7 @@ fn scope_line_counts_the_sweep() {
     let mut bars = [0u8; ferrite_core::msg::SCOPE_BARS];
     bars[1] = 30;
     bars[2] = 12;
-    t.live.mode = ModeLive::Scope { centre: t.app.radio.centre, bars, n: 4, sweeps: 2, listen: 0, open: false };
+    t.live.mode = ModeLive::Scope { centre: t.app.radio.centre, bars, n: 4, sweeps: 2, listen: 0, open: false, si: false };
     let l = find(&ui(&t), "scope centre=").to_owned();
     assert!(l.contains(" swept=4 blank=2 sweeps=2"), "{l}");
 }

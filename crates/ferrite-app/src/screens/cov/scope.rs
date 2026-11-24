@@ -27,7 +27,7 @@ fn sweep(t: &mut T, at: usize, peak: u8, sweeps: u8, open: bool) {
     bars[..n].fill(40);
     bars[at] = peak;
     let c = t.app.radio.centre;
-    t.live.mode = ModeLive::Scope { centre: c, bars, n: n as u8, sweeps, listen: 0, open };
+    t.live.mode = ModeLive::Scope { centre: c, bars, n: n as u8, sweeps, listen: 0, open, si: false };
     t.wait(100);
 }
 

@@ -7,7 +7,7 @@
 use ferrite_app::chan::ChannelStore;
 use ferrite_app::sample::Sample;
 use ferrite_app::slot::{band_of, BANDS, DEFAULT_CFG};
-use ferrite_core::freq::{mhz, Freq10};
+use ferrite_core::freq::{self, mhz, Freq10};
 use ferrite_core::path::{Cause, Path, Rx, Sel, Steps};
 use ferrite_core::scan::{Range, Resume, Scan};
 use ferrite_core::txseq::{self, Kind, Req, TxSeq};
@@ -60,7 +60,7 @@ pub fn store() -> Sample {
 enum Fake {
     Off,
     /// The band scope: listening on `listen` (0 = sweeping) since `tl`, the bars held still meanwhile.
-    Scope { centre: Freq10, step: u16, n: u8, dwell: u8, t0: f32, listen: Freq10, tl: f32 },
+    Scope { centre: Freq10, step: u16, n: u8, dwell: u8, hf: bool, si: bool, t0: f32, listen: Freq10, tl: f32 },
     Tone { t0: f32 },
     Counter { t0: f32 },
     /// FM broadcast, tuned (or a seek landed) at t0 s: the station name comes 0.4 s in, the radio text once
@@ -133,7 +133,7 @@ pub struct FakeRadio {
     last_step: f32,
     mode: Fake,
     /// The scope's bars and dwell ([`RadioCmd::ScopeCfg`]).
-    scope_cfg: (u8, u8),
+    scope_cfg: (u8, u8, bool, bool),
     /// Each slot's power level (0 Low, 1 Mid, 2 High; 3 = HF mode), for the duty limit's weighting (TX-38).
     power: [u8; 4],
     /// Slots at squelch 0: the noise floor holds them open, as on the radio.
@@ -219,7 +219,7 @@ impl FakeRadio {
             active: 0,
             last_step: 0.0,
             mode: Fake::Off,
-            scope_cfg: (60, 10),
+            scope_cfg: (60, 10, false, false),
             power: [2; 4],
             sq0: 0,
             #[cfg(feature = "bench")]
@@ -396,11 +396,11 @@ impl FakeRadio {
                 };
                 self.scan_out(i, o);
             }
-            RadioCmd::ScopeCfg { bars, dwell, .. } => self.scope_cfg = (bars, dwell),
+            RadioCmd::ScopeCfg { bars, dwell, hf, si, .. } => self.scope_cfg = (bars, dwell, hf, si),
             RadioCmd::Sweep { centre, step, on } => {
-                let (n, dwell) = self.scope_cfg;
+                let (n, dwell, hf, si) = self.scope_cfg;
                 let off = self.fm_t0.map_or(Fake::Off, |t0| Fake::Fm { t0 }); // the broadcast beside it plays on
-                self.set(if on { Fake::Scope { centre, step, n, dwell, t0: self.now, listen: 0, tl: 0.0 } } else { off })
+                self.set(if on { Fake::Scope { centre, step, n, dwell, hf, si, t0: self.now, listen: 0, tl: 0.0 } } else { off })
             }
             RadioCmd::ScopeListen { freq, .. } => {
                 if let Fake::Scope { listen, tl, .. } = &mut self.mode {
@@ -541,7 +541,7 @@ impl FakeRadio {
         let noise = |x: f32| -122.0 + (x * 12.9).sin() * 3.0 + (x * 3.3).cos() * 2.0;
         self.live.mode = match self.mode {
             Fake::Off => ModeLive::Off,
-            Fake::Scope { centre, step, n, dwell, t0, listen, tl } => {
+            Fake::Scope { centre, step, n, dwell, hf, si, t0, listen, tl } => {
                 // Which chip (and relay state) a frequency needs: HF on chip 1 with the relay, VHF chip 0, UHF
                 // chip 1; points needing another than the centre's are blank (SCOPE-5).
                 let chip = |f: Freq10| if f < mhz(18) { 3 } else if f < mhz(64) { 2 } else if f < mhz(300) { 0 } else { 1 };
@@ -550,7 +550,8 @@ impl FakeRadio {
                 let mut bars = [0u8; SCOPE_BARS];
                 for (i, b) in bars[..n].iter_mut().enumerate() {
                     let fi = centre as i64 + (i as i64 - n as i64 / 2) * step as i64;
-                    if fi <= 0 || chip(fi as Freq10) != chip(centre) {
+                    let Ok(f) = Freq10::try_from(fi) else { continue };
+                    if (hf && !freq::hf_scope_range(si).contains(&f)) || (!si && chip(f) != chip(centre)) {
                         continue;
                     }
                     let f = fi as f32;
@@ -561,12 +562,22 @@ impl FakeRadio {
                             lv = lv.max(l - d * 14.0 + (tt * 2.1 + cf as f32).sin() * 3.0);
                         }
                     }
+                    if si {
+                        for cf in HF_STATIONS {
+                            let d = (f - cf as f32).abs() / step.max(1) as f32;
+                            if d < 1.5 {
+                                lv = lv.max(-80.0 - d * 14.0);
+                            }
+                        }
+                    }
                     *b = (lv + 160.0).clamp(1.0, 255.0) as u8;
                 }
                 // Sweeps a second: n points at the dwell plus about 0.3 ms each to retune.
-                let rate = 1000.0 / (n as f32 * (dwell.max(1) as f32 / 10.0 + 0.3)).max(50.0);
-                let open = listen != 0 && CARRIERS.iter().any(|&(cf, _)| (cf as i64 - listen as i64).abs() < 1_250);
-                ModeLive::Scope { centre, bars, n: n as u8, sweeps: ((tt - t0) * rate) as u8, listen, open }
+                let point_ms = if si { 20.0 } else { dwell.max(1) as f32 / 10.0 + 0.3 };
+                let rate = 1000.0 / (n as f32 * point_ms).max(50.0);
+                let open = listen != 0 && (si
+                    || CARRIERS.iter().any(|&(cf, _)| (cf as i64 - listen as i64).abs() < 1_250));
+                ModeLive::Scope { centre, bars, n: n as u8, sweeps: ((tt - t0) * rate) as u8, listen, open, si }
             }
             Fake::Tone { t0 } => ModeLive::Probe { freq: 0, rssi: -84, tone: if t - t0 > 2.5 { 1000 } else { 0 } },
             Fake::Counter { t0 } => {

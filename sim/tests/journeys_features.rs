@@ -528,3 +528,56 @@ fn activation_contact_survives_restart() {
         assert_eq!(qso.freq, mhz(145) + 92_000, "the active slot's TX frequency");
     }
 }
+
+/// HF waterfall can scan the SI4732, move through the receiver boundary and tune back to HF mode.
+#[test]
+fn hf_waterfall_below_18_mhz() {
+    let mut r = Radio::new();
+    let centre = 958_500;
+    r.menu("0 3 3").wait(8000).expect_screen("HF mode");
+    r.type_("9*585").press(Key::Menu);
+    assert_eq!(r.sim.app().settings().hf.freq, centre);
+    r.sim.app_mut().settings_mut().scope_step = 0; // SI4732 cannot step at 10 Hz.
+    r.take_cmds();
+    r.press(Key::Menu).wait(2000).expect_screen("Scope").expect_text("HF 2D");
+    assert!(r.take_cmds().iter().any(|c| matches!(c, RadioCmd::Sweep { centre: 958_500, step: 100, on: true })));
+    r.press(Key::Star).expect_text("HF 3D");
+    r.press(Key::Right).press(Key::Side(1)).expect_text("AM preview");
+    assert!(r.take_cmds().iter().any(|c| matches!(c, RadioCmd::ScopeListen { freq: 958_600, .. })));
+    r.press(Key::Exit).type_("27*18").press(Key::Menu).expect_screen("Scope");
+    assert!(r.take_cmds().iter().any(|c| matches!(c, RadioCmd::Sweep { centre: 2_718_000, step: 1, on: true })));
+    r.type_("0*15").press(Key::Menu).wait(1500).expect_screen("Scope");
+    let ferrite_core::msg::ModeLive::Scope { centre, n, bars, sweeps, .. } = r.sim.radio().live.mode else {
+        panic!("HF sweep did not reach the low end");
+    };
+    assert_eq!(centre, 15_000);
+    assert!(sweeps > 0);
+    assert!(bars[..usize::from(n / 2)].iter().all(|&v| v == 0));
+    assert!(bars[usize::from(n / 2)..usize::from(n)].iter().any(|&v| v != 0));
+    r.type_("9*58").press(Key::Menu).expect_screen("Scope");
+    assert!(r.take_cmds().iter().any(|c| matches!(c, RadioCmd::Sweep { centre: 958_000, step: 100, on: true })));
+    r.press(Key::Right).press(Key::Menu).expect_screen("HF mode");
+    assert_eq!(r.sim.app().settings().hf.freq, 958_100);
+}
+
+/// The HF waterfall can compare both receivers on the same frequency.
+#[test]
+fn hf_waterfall_can_choose_a_receiver() {
+    use ferrite_core::msg::ModeLive;
+
+    let mut r = Radio::new();
+    r.menu("0 3 3").wait(8000).type_("27*185").press(Key::Menu).press(Key::Menu);
+    r.expect_screen("Scope").expect_text("Auto BK");
+    assert!(matches!(r.sim.radio().live.mode, ModeLive::Scope { centre: 2_718_500, si: false, .. }));
+    r.take_cmds();
+    r.press(Key::VfoMem).expect_text("SI4732");
+    assert!(r.take_cmds().iter().any(|c| matches!(c, RadioCmd::ScopeCfg { hf: true, si: true, .. })));
+    assert!(matches!(r.sim.radio().live.mode, ModeLive::Scope { centre: 2_718_500, si: true, .. }));
+    r.press(Key::Side(1)).expect_text("AM preview");
+    r.press(Key::VfoMem).expect_text("BK4829");
+    assert!(matches!(r.sim.radio().live.mode, ModeLive::Scope { centre: 2_718_500, si: false, listen: 0, .. }));
+    r.press(Key::VfoMem).expect_text("Auto BK");
+    r.type_("9*58").press(Key::Menu).expect_text("Auto SI");
+    r.press(Key::VfoMem).expect_text("SI4732");
+    r.press(Key::VfoMem).expect_text("Auto SI");
+}

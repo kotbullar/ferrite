@@ -26,7 +26,7 @@ pub const STRIP_STEP: u16 = 400;
 /// The strip's start (MODE-2, from [`App::reconcile_mode`]): stock's 10 ms a point (dwell is in 0.1 ms; at 1 ms
 /// the strip starved the UI on the radio, Oct 12, 2026) around the active frequency.
 pub(crate) fn send_strip(app: &mut App, f: ferrite_core::freq::Freq10) {
-    app.out.push(RadioCmd::ScopeCfg { bars: scope::STRIP_BARS as u8, dwell: 100, strip: true, hf: false });
+    app.out.push(RadioCmd::ScopeCfg { bars: scope::STRIP_BARS as u8, dwell: 100, strip: true, hf: false, si: false });
     app.out.push(RadioCmd::Sweep { centre: f, step: STRIP_STEP, on: true });
 }
 

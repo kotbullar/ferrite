@@ -133,7 +133,7 @@ pub enum RadioCmd {
     /// Apart from [`RadioCmd::Sweep`] so a command stays 8 bytes. `strip`: the sweep is home's strip, which keeps
     /// looking at the active slot's own frequency and holds there on a carrier (MODE-5, decision 115).
     /// `hf`: the scope was opened by HF mode on its BK4829 path.
-    ScopeCfg { bars: u8, dwell: u8, strip: bool, hf: bool },
+    ScopeCfg { bars: u8, dwell: u8, strip: bool, hf: bool, si: bool },
     /// A key or knob step while the scope or home's strip sweeps: the sweep waits and its pass starts again, so the
     /// UI handles the input first (SCOPE-14, `ferrite_core::sweephold`).
     SweepHold,
@@ -848,7 +848,7 @@ pub enum ModeLive {
     /// Band scope: one level per step for the first `n` bars (0 = blank: not swept, or it needs the other chip
     /// or relay state, SCOPE-5), else dBm + 160, averaged with the last sweep (SCOPE-4). While listening,
     /// `listen` is the frequency and `open` its squelch; the bars hold still.
-    Scope { centre: Freq10, bars: [u8; SCOPE_BARS], n: u8, sweeps: u8, listen: Freq10, open: bool },
+    Scope { centre: Freq10, bars: [u8; SCOPE_BARS], n: u8, sweeps: u8, listen: Freq10, open: bool, si: bool },
     /// Tone search: the tone word found (0 = searching); counter: the strongest frequency (0 = none) and level.
     Probe { freq: Freq10, rssi: i16, tone: u16 },
     /// FM broadcast: frequency (10 kHz), RDS station name and the last complete radio text (all 64 characters,

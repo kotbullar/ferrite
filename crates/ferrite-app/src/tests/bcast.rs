@@ -262,7 +262,7 @@ fn strip_sweeps_beside_the_broadcast() {
     c.extend(t.cmds());
     assert_eq!((t.app.radio.mode, t.app.radio.fm_on), (Mode::Strip, true), "{c:?}");
     assert!(c.contains(&RadioCmd::Broadcast(BroadcastCmd::Fm(10_050))), "{c:?}");
-    assert!(c.contains(&RadioCmd::ScopeCfg { bars: crate::screens::scope::STRIP_BARS as u8, dwell: 100, strip: true, hf: false }), "{c:?}");
+    assert!(c.contains(&RadioCmd::ScopeCfg { bars: crate::screens::scope::STRIP_BARS as u8, dwell: 100, strip: true, hf: false, si: false }), "{c:?}");
     assert!(c.iter().any(|c| matches!(c, RadioCmd::Sweep { centre: TWO_M, on: true, .. })), "{c:?}");
     assert!(!t.app.strip_blocked());
     // the knob: the strip waits for it to rest; the broadcast plays on, untouched
@@ -276,7 +276,7 @@ fn strip_sweeps_beside_the_broadcast() {
     assert_eq!(t.app.radio.mode, Mode::Strip);
     assert!(!c.iter().any(|c| matches!(c, RadioCmd::Broadcast(_))), "the broadcast never restarts: {c:?}");
     // the slot heard while the strip sweeps (the strip's report has the mode): B says FM, then muted
-    t.live.mode = ModeLive::Scope { centre: TWO_M, bars: [0; ferrite_core::msg::SCOPE_BARS], n: 56, sweeps: 1, listen: 0, open: false };
+    t.live.mode = ModeLive::Scope { centre: TWO_M, bars: [0; ferrite_core::msg::SCOPE_BARS], n: 56, sweeps: 1, listen: 0, open: false, si: false };
     t.live.bcast_heard = true;
     assert_eq!(t.app.state(1, &t.live).0, "FM");
     t.live.bcast_heard = false;

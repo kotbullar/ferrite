@@ -9,7 +9,7 @@ impl Radio {
     /// amp stayed off in FM broadcast on the radio (Oct 12, 2026): only the BK4829s were ever counted as a source.
     /// Also run while Battery Save has the BK4829s asleep (BCR-19), so the broadcast comes back on time.
     pub(super) fn bcast_audio(&mut self, now: u32, slot_heard: bool) {
-        let broadcast = self.si.mode().is_some() && self.hf.is_none();
+        let broadcast = self.si.mode().is_some() && self.hf.is_none() && !self.scope.as_ref().is_some_and(ScopeRun::uses_si);
         if !broadcast && self.ldo_kept != 0 {
             self.ldo_release(); // PWR-21.6: the supplies kept on for the broadcast go off with it
         }

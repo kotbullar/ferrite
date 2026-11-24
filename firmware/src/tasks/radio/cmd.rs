@@ -267,7 +267,7 @@ impl Radio {
             | RadioCmd::DtmfSend { .. } => {}
             // Not on the radio yet, each waiting on something named in the manual's Status lines: band scope,
             // tone search, crossband (chapters 21, 22, 19): their own exclusive modes, after 2d.
-            RadioCmd::ScopeCfg { bars, dwell, strip, hf } => self.scope_cfg = (bars, dwell, strip, hf),
+            RadioCmd::ScopeCfg { bars, dwell, strip, hf, si } => self.scope_cfg = (bars, dwell, strip, hf, si),
             RadioCmd::Sweep { centre, step, on } => {
                 self.sweep_hold.clear();
                 self.scope(centre, step, on).await
@@ -277,7 +277,7 @@ impl Radio {
                 let now = now_ms() as u32;
                 if let Some(sc) = self.scope.as_mut().filter(|sc| sc.listen == 0) {
                     if self.sweep_hold.input(now) {
-                        (sc.i, sc.started, sc.look) = (0, now, 0);
+                        (sc.i, sc.started, sc.look, sc.si_tune_at) = (0, now, 0, None);
                         self.scope_point();
                     }
                 }

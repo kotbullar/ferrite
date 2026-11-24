@@ -336,7 +336,7 @@ struct Radio {
     scope: Option<ScopeRun>,
     /// SCOPE-14: the sweep waits after a key or knob step, so the UI handles it first.
     sweep_hold: SweepHold,
-    scope_cfg: (u8, u8, bool, bool),
+    scope_cfg: (u8, u8, bool, bool, bool),
     /// SAME weather alerts (WX-4, DEC-19): on from the UI, and the BK4829 receiver's state.
     same_on: bool,
     /// DEC-6: the DTMF detector wanted, what each chip was armed for, and each slot's digits.
@@ -398,11 +398,13 @@ const SI_VOLUME: u8 = 56;
 /// dwell, then REG_67. Stock dwells about 10 ms a point (its 10 ms tick); the dwell is 0 3 1 3's.
 struct ScopeRun {
     hf: bool,
+    si: bool,
     chip: u8,
     centre: Freq10,
     step: Freq10,
     n: u8,
     dwell_us: u32,
+    si_tune_at: Option<u32>,
     /// The point measured at the next wait (tuned already), and the raw level of each point last sweep.
     i: u8,
     last: [u8; ferrite_core::msg::SCOPE_BARS],
@@ -857,7 +859,7 @@ pub async fn task() {
         tsearch: None,
         scope: None,
         sweep_hold: SweepHold::new(),
-        scope_cfg: (60, 100, false, false),
+        scope_cfg: (60, 100, false, false, false),
         same_on: false,
         dtmf_on: false,
         dtmf_key: [None; 2],
@@ -984,7 +986,7 @@ pub async fn task() {
                     let left = d.wrapping_sub(now_ms() as u32); // past the end: wraps above HOLD_MS
                     Instant::now() + embassy_time::Duration::from_millis(if left <= sweephold::HOLD_MS { left as u64 } else { 0 })
                 }
-                None => Instant::now() + embassy_time::Duration::from_micros(sc.dwell_us.max(2_000) as u64),
+                None => Instant::now() + embassy_time::Duration::from_micros(sc.dwell_us.max(if sc.uses_si() { 10_000 } else { 2_000 }) as u64),
             },
             _ => Instant::from_millis(at),
         };

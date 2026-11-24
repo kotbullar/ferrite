@@ -397,6 +397,18 @@ pub(crate) fn refuse(f: Freq10) -> Option<&'static str> {
     }
 }
 
+fn hf_scope_entry(to: EntryFor, app: &App) -> bool {
+    to == EntryFor::ScopeCentre && super::scope::from_hf(app)
+}
+
+fn entry_refusal(to: EntryFor, app: &App, f: Freq10) -> Option<&'static str> {
+    if hf_scope_entry(to, app) {
+        super::scope::hf_centre_refusal(app, f)
+    } else {
+        refuse(f)
+    }
+}
+
 impl View for Entry {
     fn name(self) -> &'static str {
         match self.to {
@@ -577,7 +589,7 @@ fn commit(e: Entry, app: &mut App, store: &impl ChannelStore) {
         }
         return;
     }
-    if let Some(why) = refuse(f) {
+    if let Some(why) = entry_refusal(e.to, app, f) {
         // VFO-21: the entry stays open with its digits, so they can be fixed
         let (head, body) = why.split_once(": ").unwrap_or((why, ""));
         return app.show_toast(head.as_bytes(), body.as_bytes(), false);
@@ -687,11 +699,12 @@ match self.to {
                     rows[1].1.set(name.as_bytes());
                     rows[1].1.push(if f % step == 0 { b", on it" } else { b", off it" });
                     rows[2].0 = b"Transmit";
-                    match refuse(f) {
+                    match entry_refusal(self.to, app, f) {
                         Some(why) => {
                             rows[2].1.set(b"-");
                             (rows[2].2, note) = (AMBER, why.as_bytes());
                         }
+                        None if hf_scope_entry(self.to, app) => rows[2].1.set(b"RX only"),
                         None => match tx_text(app, f, dev.tx_built) {
                             Ok(t) => (rows[2].1, rows[2].2) = (Buf::from(t.as_bytes()), GREEN),
                             Err(t) => (rows[2].1, rows[2].2) = (Buf::from(t.as_bytes()), AMBER),

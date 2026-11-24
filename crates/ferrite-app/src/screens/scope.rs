@@ -18,7 +18,7 @@ use crate::keys::{KeyEvent, Press};
 use crate::settings::{SCOPE_BAR_COUNTS, SCOPE_TRIGGERS};
 use crate::slot::{band_name, MODES, STEPS};
 use crate::{App, Screen};
-use ferrite_core::freq::Freq10;
+use ferrite_core::freq::{self, Freq10};
 use ferrite_core::keys::Key;
 use ferrite_core::msg::{LiveAll, ModeLive, RadioCmd, SCOPE_BARS};
 use ferrite_ui::assets::*;
@@ -68,7 +68,51 @@ pub struct Scope {
 const HF_DEPTH: usize = 8;
 const HF_POINTS: usize = 40;
 
+#[derive(Clone, Copy)]
+enum HfReceiver {
+    Auto,
+    Si4732,
+    Bk4829,
+}
+
+impl HfReceiver {
+    fn uses_si(self, centre: Freq10) -> bool {
+        match self {
+            Self::Auto => centre < hf::CHIP1_FROM,
+            Self::Si4732 => true,
+            Self::Bk4829 => false,
+        }
+    }
+
+    fn limits(self) -> core::ops::RangeInclusive<Freq10> {
+        match self {
+            Self::Auto => hf::BOTTOM..=hf::TOP - 1,
+            Self::Si4732 => freq::hf_scope_range(true),
+            Self::Bk4829 => freq::hf_scope_range(false),
+        }
+    }
+
+    fn next(self, centre: Freq10) -> Self {
+        match self {
+            Self::Auto if Self::Si4732.limits().contains(&centre) => Self::Si4732,
+            Self::Auto => Self::Bk4829,
+            Self::Si4732 if Self::Bk4829.limits().contains(&centre) => Self::Bk4829,
+            Self::Si4732 | Self::Bk4829 => Self::Auto,
+        }
+    }
+
+    fn label(self, centre: Freq10) -> &'static [u8] {
+        match self {
+            Self::Auto if self.uses_si(centre) => b"Auto SI",
+            Self::Auto => b"Auto BK",
+            Self::Si4732 => b"SI4732",
+            Self::Bk4829 => b"BK4829",
+        }
+    }
+}
+
 pub(crate) struct HfWaterfall {
+    receiver: HfReceiver,
     enabled: bool,
     hold: bool,
     held: [u8; SCOPE_BARS],
@@ -81,7 +125,7 @@ pub(crate) struct HfWaterfall {
 
 impl HfWaterfall {
     pub(crate) const fn new() -> Self {
-        Self { enabled: false, hold: false, held: [0; SCOPE_BARS], frame: None, seen: None, rows: [[0; HF_POINTS]; HF_DEPTH], next: 0, len: 0 }
+        Self { receiver: HfReceiver::Auto, enabled: false, hold: false, held: [0; SCOPE_BARS], frame: None, seen: None, rows: [[0; HF_POINTS]; HF_DEPTH], next: 0, len: 0 }
     }
 
     fn reset(&mut self) {
@@ -217,7 +261,12 @@ pub fn bars_n(app: &App) -> usize {
 
 /// The step between bars (0 3 1 2), 10 Hz units.
 pub fn step_of(app: &App) -> u16 {
-    STEPS[app.set.scope_step as usize % STEPS.len()].0 as u16
+    let step = STEPS[app.set.scope_step as usize % STEPS.len()].0 as u16;
+    if from_hf(app) && app.hf_waterfall.receiver.uses_si(app.radio.centre) {
+        step.div_ceil(100) * 100 // The SI4732 tunes in whole kHz.
+    } else {
+        step
+    }
 }
 
 /// Hold 1 on home, MENU 0 3 1 6 (SCOPE-1): the scope around the active slot's frequency.
@@ -228,8 +277,11 @@ pub fn open(app: &mut App) -> Screen {
 pub(crate) fn open_at(app: &mut App, f: Freq10, hf: bool) -> Screen {
     if hf {
         app.hf_waterfall.reset();
+        if !app.hf_waterfall.receiver.limits().contains(&f) {
+            app.hf_waterfall.receiver = HfReceiver::Auto;
+        }
     }
-    app.radio.centre = f; // MODE-2: the reconciler starts the sweep here
+    app.radio.centre = if hf { hf_centre(app, f) } else { f }; // MODE-2: the reconciler starts the sweep here
     Screen::Scope(Scope { hf, marker: (bars_n(app) / 2) as u8, listen: 0, at: 0, peak: 255, run: 0, seen: 0, heard: false, since: 0 })
 }
 
@@ -240,13 +292,32 @@ pub(crate) fn from_hf(app: &App) -> bool {
     }).unwrap_or(false)
 }
 
+fn hf_centre(app: &App, freq: Freq10) -> Freq10 {
+    let rx = app.hf_waterfall.receiver;
+    let limits = rx.limits();
+    let freq = freq.clamp(*limits.start(), *limits.end());
+    if rx.uses_si(freq) { freq / 100 * 100 } else { freq }
+}
+
+pub(crate) fn hf_centre_refusal(app: &App, freq: Freq10) -> Option<&'static str> {
+    let rx = app.hf_waterfall.receiver;
+    if rx.limits().contains(&freq) {
+        return None;
+    }
+    Some(match rx {
+        HfReceiver::Auto => "HF scope: 150 kHz to 64 MHz",
+        HfReceiver::Si4732 => "SI4732: 150 kHz to 30 MHz",
+        HfReceiver::Bk4829 => "BK4829: 18 MHz to 64 MHz",
+    })
+}
+
 fn centre_for(app: &App, centre: Freq10) -> Freq10 {
-    if from_hf(app) { centre.clamp(hf::CHIP1_FROM, hf::TOP - 1) } else { centre }
+    if from_hf(app) { hf_centre(app, centre) } else { centre }
 }
 
 fn valid_for_hf(app: &mut App, freq: Freq10) -> bool {
-    if from_hf(app) && !(hf::CHIP1_FROM..hf::TOP).contains(&freq) {
-        app.show_toast(b"HF waterfall", b"18 to 64 MHz", false);
+    if from_hf(app) && !(hf::BOTTOM..hf::TOP).contains(&freq) {
+        app.show_toast(b"HF scope", b"150 kHz to 64 MHz", false);
         return false;
     }
     true
@@ -265,7 +336,7 @@ pub(crate) fn send_sweep(app: &mut App, centre: Freq10) {
     let (step, bars, dwell) = (step_of(app), bars_n(app) as u8, app.set.scope_dwell.clamp(1, 100));
     let hf = from_hf(app);
     app.radio.scope_hf = hf;
-    app.out.push(RadioCmd::ScopeCfg { bars, dwell, strip: false, hf });
+    app.out.push(RadioCmd::ScopeCfg { bars, dwell, strip: false, hf, si: hf && app.hf_waterfall.receiver.uses_si(centre) });
     app.out.push(RadioCmd::Sweep { centre, step, on: true });
 }
 
@@ -375,6 +446,18 @@ impl View for Scope {
                 let m = (m as i32 + d).clamp(0, n as i32 - 1) as u8;
                 app.screen = Screen::Scope(Scope { marker: m, ..self });
             }
+            (Key::VfoMem, Short) if self.hf => {
+                let old = app.hf_waterfall.receiver;
+                let next = old.next(centre);
+                app.hf_waterfall.receiver = next;
+                if old.uses_si(centre) != next.uses_si(centre) {
+                    app.hf_waterfall.reset();
+                    let centre = hf_centre(app, centre);
+                    app.screen = Screen::Scope(Scope { marker: (n / 2) as u8, peak: 255, ..self.sweeping() });
+                    app.redraw_all();
+                    sweep(app, centre);
+                }
+            }
             (Key::Menu, Short) => {
                 // SCOPE-3: OK (Go) tunes the active slot's VFO to the marker.
                 let f = bar_freq(centre, step, n, m as i32);
@@ -423,6 +506,9 @@ impl View for Scope {
                         let freq = bar_freq(centre, step, n, i as i32);
                         if !valid_for_hf(app, freq) {
                             return;
+                        }
+                        if self.hf && !freq::hf_scope_range(app.hf_waterfall.receiver.uses_si(centre)).contains(&freq) {
+                            return app.show_toast(b"Receiver edge", b"Move the centre", false);
                         }
                         listen(app, freq);
                         app.screen = Screen::Scope(Scope { listen: which, at: i, run: 0, ..self });
@@ -495,8 +581,8 @@ impl View for Scope {
     /// The trigger (SCOPE-10): after 3 sweeps in a row with the strongest bar over the line, listen to it (until
     /// its squelch closes) or log it.
     fn tick(self, app: &mut App, live: &LiveAll) {
-        let ModeLive::Scope { centre, bars, n, sweeps, open, .. } = live.mode else { return };
-        if from_hf(app) && centre != app.radio.centre {
+        let ModeLive::Scope { centre, bars, n, sweeps, open, si, .. } = live.mode else { return };
+        if self.hf && (centre != app.radio.centre || si != app.hf_waterfall.receiver.uses_si(centre)) {
             return;
         }
         let n = (n as usize).clamp(1, SCOPE_BARS);
@@ -516,7 +602,7 @@ impl View for Scope {
         } else if s.listen == 0 && sweeps != s.seen {
             s.seen = sweeps;
             let (trig, line) = (app.set.scope_trig, app.set.scope_line);
-            let over = pk.filter(|&p| line != 0 && bar_h(bars[p as usize], floor) >= line_h(line));
+            let over = pk.filter(|&p| (!si || trig != 1) && line != 0 && bar_h(bars[p as usize], floor) >= line_h(line));
             s.run = if over.is_some() { s.run.saturating_add(1) } else { 0 };
             if let (Some(p), 3) = (over.filter(|_| trig != 0), s.run) {
                 let f = bar_freq(centre, step_of(app), n, p as i32);
@@ -537,8 +623,10 @@ impl View for Scope {
     fn render(self, app: &mut App, lcd: &mut impl Panel, cx: &Cx<impl ChannelStore>) {
         let step = step_of(app);
         let hf = from_hf(app);
+        let receiver = app.hf_waterfall.receiver;
+        let on_si = hf && receiver.uses_si(app.radio.centre);
         let (centre, bars, n, sweeps, open) = match cx.live.mode {
-            ModeLive::Scope { centre, bars, n, sweeps, open, .. } if !hf || centre == app.radio.centre => (centre, bars, (n as usize).clamp(1, SCOPE_BARS), sweeps, open),
+            ModeLive::Scope { centre, bars, n, sweeps, open, si, .. } if !hf || (centre == app.radio.centre && si == on_si) => (centre, bars, (n as usize).clamp(1, SCOPE_BARS), sweeps, open),
             _ => (app.radio.centre, [0; SCOPE_BARS], bars_n(app), 0, false),
         };
         let three_d = hf && app.hf_waterfall.enabled;
@@ -548,13 +636,13 @@ impl View for Scope {
         let line = app.set.scope_line;
         let matching_frame = app.hf_waterfall.frame == Some((centre, step, n));
         // Header: band, centre; the MHz labels under the graph (SCOPE-2).
-        if app.dirty(1, Mix::new().h(&centre).h(&n).h(&step).h(&hold).get()) {
+        if app.dirty(1, Mix::new().h(&centre).h(&n).h(&step).h(&hold).h(&(receiver as u8)).get()) {
             let fq = w::freq3(centre);
             if hf {
                 w::field(lcd, 0, 240, 20, 40, 35, fq.as_bytes(), const { &w::st(&UI_15B, FREQ, SURFACE, Align::Center) });
                 let (label, color) = if hold { (b"Peak hold".as_slice(), AMBER) } else { (b"CENTER".as_slice(), SUB) };
                 lcd.text4_rows(8, 34, label, &UI_12, color, SURFACE, 20, 40);
-                w::field(lcd, 185, 47, 20, 40, 34, b"MHz", const { &w::st(&UI_12, SUB, SURFACE, Align::Right) });
+                w::field(lcd, 165, 67, 20, 40, 34, receiver.label(centre), const { &w::st(&UI_12, SUB, SURFACE, Align::Right) });
             } else {
                 w::field(lcd, 8, 80, 21, 39, 34, band_name(centre).as_bytes(), const { &w::st(&UI_12, SUB, BG, Align::Left) });
                 let fw = text4_width(fq.as_bytes(), &UI_12B);
@@ -729,7 +817,7 @@ impl View for Scope {
         let mut p = Buf::<40>::new();
         if self.listen != 0 {
             p.push(if open { b"Signal" } else { b"Quiet " });
-            p.push(if hf { " \u{b7} Listen only" } else { " \u{b7} PTT talks here" }.as_bytes());
+            p.push(if on_si { " \u{b7} AM preview" } else if hf { " \u{b7} Listen only" } else { " \u{b7} PTT talks here" }.as_bytes());
         } else {
             p.push(b"Strongest ");
             match pk {
@@ -786,7 +874,7 @@ impl View for Scope {
             return if self.listen == 0 && app.hf_waterfall.hold {
                 Hints::new(&[("*", "2D/3D"), ("#", "Held peak"), ("OK", "Tune")])
             } else if self.listen == 0 {
-                Hints::new(&[("*", "2D/3D"), ("hold *", "Peak hold"), ("OK", "Tune")])
+                Hints::new(&[("*", "2D/3D"), ("V/M", "Receiver"), ("OK", "Tune")])
             } else {
                 Hints::new(&[("*", "2D/3D"), ("BACK", "Sweep"), ("OK", "Tune")])
             };

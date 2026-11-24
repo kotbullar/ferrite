@@ -7,6 +7,10 @@ const HF_SEEK_KHZ: (u16, u16) = (150, 18_000);
 /// HF-15.1: the board's front end (an LNA before the SI4732's AM input) gain, estimated at 20 dB: the chip reads
 /// 13-33 dBuV of indoor noise on the whip, which a receiver measured at the antenna shows as about S2-S5.
 const SI_FRONT_DB: i16 = 20;
+
+pub(super) fn si_rssi_dbm(rssi: u8) -> i16 {
+    i16::from(rssi) - 107 - SI_FRONT_DB
+}
 /// HF-19: the SI4732's I2C half period for the patch download, us (5 otherwise, about 50 kHz).
 const PATCH_HALF_US: u32 = 1;
 /// HF mode's modes as the UI sends them (`screens::hf`): USB, LSB, CW.
@@ -176,7 +180,7 @@ impl Radio {
         let Some(h) = self.hf else { return };
         let (rssi, snr) = if h.si {
             match self.si.rsq(&mut BusyDelay) {
-                Ok(q) => (q.rssi as i16 - 107 - SI_FRONT_DB, q.snr), // HF-15.1: dBuV at the chip to dBm at the antenna
+                Ok(q) => (si_rssi_dbm(q.rssi), q.snr), // HF-15.1: dBuV at the chip to dBm at the antenna
                 Err(_) => (-127, 0),
             }
         } else {
